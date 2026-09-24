@@ -1,10 +1,12 @@
 using AgentDispatcher.Api.Executions;
+using AgentDispatcher.Api.Health;
 using AgentDispatcher.Api.Maintenance;
 using AgentDispatcher.Api.Projects;
 using AgentDispatcher.Domain.Codex;
 using AgentDispatcher.Domain.Dispatching;
 using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.GitHub;
+using AgentDispatcher.Domain.Health;
 using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
 using AgentDispatcher.Domain.Routing;
@@ -12,6 +14,7 @@ using AgentDispatcher.Domain.Workspaces;
 using AgentDispatcher.Infrastructure.Codex;
 using AgentDispatcher.Infrastructure.Dispatching;
 using AgentDispatcher.Infrastructure.GitHub;
+using AgentDispatcher.Infrastructure.Health;
 using AgentDispatcher.Infrastructure.Persistence;
 using AgentDispatcher.Infrastructure.Processes;
 using AgentDispatcher.Infrastructure.Workspaces;
@@ -69,6 +72,13 @@ builder.Services.AddSingleton<IWorkerHealthProbe>(_ =>
         _.GetRequiredService<IWorkerProcessRunner>(),
         workerUser));
 builder.Services.AddSingleton<IDispatchCoordinator, DispatchCoordinator>();
+builder.Services.AddSingleton<IHealthService>(provider =>
+    new HealthService(
+        provider.GetRequiredService<IProjectRepository>(),
+        provider.GetRequiredService<IGitHubIssueSource>(),
+        provider.GetRequiredService<IProcessRunner>(),
+        provider.GetRequiredService<IWorkerProcessRunner>(),
+        dataDirectory));
 
 var app = builder.Build();
 
@@ -88,6 +98,7 @@ app.MapProjectAutomationEndpoints();
 app.MapDispatchEndpoints();
 app.MapExecutionEndpoints();
 app.MapMaintenanceEndpoints();
+app.MapHealthEndpoints();
 
 var indexFile = Path.Combine(app.Environment.WebRootPath ?? string.Empty, "index.html");
 if (File.Exists(indexFile))

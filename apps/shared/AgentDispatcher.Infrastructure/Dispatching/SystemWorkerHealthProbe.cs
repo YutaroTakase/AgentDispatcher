@@ -52,6 +52,15 @@ public sealed class SystemWorkerHealthProbe(
             return Unavailable("Codex CLIを実行できません。", codex);
         }
 
+        var codexLogin = await workerProcessRunner.RunAsync(
+            "codex",
+            ["login", "status"],
+            cancellationToken: cancellationToken);
+        if (codexLogin.ExitCode != 0)
+        {
+            return Unavailable("Codexへ認証されていません。", codexLogin);
+        }
+
         return new WorkerHealthResult(true, null);
     }
 

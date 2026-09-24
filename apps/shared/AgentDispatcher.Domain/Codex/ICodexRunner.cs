@@ -20,6 +20,10 @@ public interface ICodexRunner
         string worktreePath,
         CancellationToken cancellationToken = default);
 
+    Task<bool> IsRunningAsync(
+        Guid executionId,
+        CancellationToken cancellationToken = default);
+
     Task CancelAsync(
         Guid executionId,
         CancellationToken cancellationToken = default);
