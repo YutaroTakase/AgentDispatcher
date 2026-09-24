@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../shared/AgentDispatcher.Domain/AgentDispatcher.Domain.csproj" />
     <ProjectReference Include="../../shared/AgentDispatcher.Infrastructure/AgentDispatcher.Infrastructure.csproj" />
   </ItemGroup>
