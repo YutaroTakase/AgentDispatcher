@@ -62,8 +62,8 @@ public sealed class CodexCliRunner(
         try
         {
             result = await processRunner.RunAsync(
-                "systemd-run",
-                arguments,
+                "sudo",
+                ["--non-interactive", "systemd-run", .. arguments],
                 cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
@@ -103,8 +103,8 @@ public sealed class CodexCliRunner(
         CancellationToken cancellationToken = default)
     {
         var result = await processRunner.RunAsync(
-            "systemctl",
-            ["stop", GetProcessIdentifier(executionId)],
+            "sudo",
+            ["--non-interactive", "systemctl", "stop", GetProcessIdentifier(executionId)],
             cancellationToken: cancellationToken);
 
         if (result.ExitCode != 0 &&
