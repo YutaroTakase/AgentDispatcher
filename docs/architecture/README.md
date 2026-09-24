@@ -1,24 +1,24 @@
-# Architecture Baseline
+# アーキテクチャ
 
-このDirectoryはAgentDispatcherの現在有効な技術Architectureを定義する。
+このディレクトリはAgentDispatcherの現在有効な技術構成を定義する。
 
-Product上の振る舞いは[Product Requirements](../product/product-requirements.md)、実行フローは[System Overview](system-overview.md)、採用理由は[Architecture Decisions](decisions.md)を正本とする。
+プロダクト上の振る舞いは[プロダクト要件](../product/product-requirements.md)、実行の流れは[システム概要](system-overview.md)、採用理由は[アーキテクチャ判断](decisions.md)を正本とする。
 
-## Technology Baseline
+## 技術構成
 
-- Frontend: Nuxt 4 + TypeScript
-- Control API: .NET 10 / ASP.NET Core
-- Dispatcher: .NET 10 Worker
-- Persistence: SQLite
-- Execution log: file storage
-- Source control / work item access: Git / GitHub CLI
-- Coding worker: Codex CLI
-- Service manager: systemd
-- Execution isolation: Git worktree
+- フロントエンド: Nuxt 4 + TypeScript
+- 管理API: .NET 10 / ASP.NET Core
+- 常駐処理: .NET 10 Worker
+- データベース: SQLite
+- 実行ログ: ファイル保存
+- ソース管理・Issue取得: Git / GitHub CLI
+- AI開発作業者: Codex CLI
+- サービス管理: systemd
+- 実行単位の分離: Git worktree
 
-FrontendはSPAとしてbuildし、初期ProductionではASP.NET Coreからstatic assetsを配信する。SSRを必須としない。
+フロントエンドはSPAとして構築し、初期構成ではASP.NET Coreから静的ファイルとして配信する。SSRは必須としない。
 
-## Repository Structure
+## リポジトリ構成
 
 ```text
 AgentDispatcher/
@@ -49,22 +49,22 @@ AgentDispatcher/
    └─ installer/
 ```
 
-- `apps/`: application code and tests
-- `docs/`: current product, architecture, development documentation
-- `infra/`: self-hosted runtime definitions
-- `tools/`: install / update / uninstall / health tooling
-- `.github/`: repository automation
-- `.agents/`: optional AI development workflow assets
+- `apps/`: アプリケーション本体とテスト
+- `docs/`: 現在有効なプロダクト・アーキテクチャ・開発文書
+- `infra/`: セルフホスト実行環境の定義
+- `tools/`: 導入、更新、削除、状態確認用ツール
+- `.github/`: GitHub上の自動化
+- `.agents/`: AIを利用した開発手順の補助資産
 
-## Runtime Boundaries
+## 実行時の責務分離
 
-- **Web / API**: configuration、query、cancel request、history
-- **Dispatcher Worker**: scan、candidate selection、worktree lifecycle、Codex process、cleanup、recovery
-- **Worker identity**: GitHub / Codex credentials and Codex execution
-- **SQLite**: AgentDispatcher-owned durable state
-- **File storage**: full execution logs
-- **GitHub**: Issue / PR / Review / CI source of truth
+- **Web画面・管理API**: 設定、参照、取消要求、履歴表示
+- **常駐処理**: Issue確認、候補選定、作業ツリー管理、Codex実行、定期整理、再起動後の復旧
+- **実行作業者用Unix利用者**: GitHub・Codex認証情報の保持とCodex実行
+- **SQLite**: AgentDispatcher固有の永続データ
+- **ログ保存領域**: 実行時の完全なログ
+- **GitHub**: Issue、Pull Request、レビュー、CIの正本
 
-Control APIとDispatcherはdurable stateを共有できるが、Web request lifecycleと長時間execution lifecycleを分離する。
+管理APIと常駐処理は永続データを共有できるが、Web要求の処理と長時間実行処理の責務は分離する。
 
-Codex executionは専用Unix identityで起動し、Web/API identityからcredentialを分離する。
+Codexは専用Unix利用者で起動し、Web・管理APIの実行利用者から認証情報を分離する。
