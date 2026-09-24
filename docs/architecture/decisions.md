@@ -1,77 +1,77 @@
-# Architecture Decisions
+# アーキテクチャ判断
 
 この文書は主要な技術判断と採用理由だけを記録する。
 
-現在の構成そのものは[Architecture Baseline](README.md)を正本とする。
+現在の構成そのものは[アーキテクチャ](README.md)を正本とする。
 
-## AD-001 — WSL2 Self-hostedを初期Runtimeとする
+## AD-001 — 初期実行環境をWSL2上のセルフホスト構成とする
 
-**Status:** Accepted
+**状態:** 採用
 
-初期利用者をWindows開発PC上の個人開発者とし、クラウドControl Planeを必須にせず低コストで導入できることを優先する。
+初期利用者をWindows開発PC上の個人開発者とし、クラウド上の管理基盤を必須にせず低コストで導入できることを優先する。
 
-## AD-002 — FrontendはNuxt 4を採用する
+## AD-002 — フロントエンドにNuxt 4を採用する
 
-**Status:** Accepted
+**状態:** 採用
 
-Next.js、Nuxt、SvelteKitを比較し、管理画面主体でSSRを必須とせず、SPA / static outputを選択でき、ASP.NET Core APIと責務分離しやすいNuxt 4を採用する。
+Next.js、Nuxt、SvelteKitを比較し、管理画面主体でSSRを必須とせず、SPAや静的出力を選択でき、ASP.NET Core APIと責務を分離しやすいNuxt 4を採用する。
 
-特定クラウドFrontend platformへの依存を初期要件にしない。
+特定のクラウド向けフロントエンド基盤への依存を初期要件にしない。
 
-## AD-003 — Backend / Workerは.NET 10とする
+## AD-003 — 管理APIと常駐処理に.NET 10を採用する
 
-**Status:** Accepted
+**状態:** 採用
 
-Control APIと長時間Dispatcher処理を同一言語・runtimeで実装しつつ、Web request lifecycleとWorker execution lifecycleはprocess責務として分離する。
+管理APIと長時間の常駐処理を同じ言語・実行環境で実装しつつ、Web要求とAI実行処理の責務は分離する。
 
-## AD-004 — SQLiteを初期Persistenceとする
+## AD-004 — 初期データベースにSQLiteを採用する
 
-**Status:** Accepted
+**状態:** 採用
 
-単一Host、単一利用者、local-onlyをMVP前提とするため、外部DB serviceを必須にしない。
+単一ホスト、単一利用者、ローカル利用をMVPの前提とし、外部データベースを必須にしない。
 
-将来のmulti-host化を妨げないようPersistence境界は分離する。
+将来の複数ホスト化を妨げないよう、永続化処理は境界を分離する。
 
-## AD-005 — GitHubをWork ItemのSource of Truthとする
+## AD-005 — GitHubを作業項目の正本とする
 
-**Status:** Accepted
+**状態:** 採用
 
-Issue / PR / Review / CIをAgentDispatcherへ複製して独自正本を作ると同期問題が生じるため、GitHubを正本としExecutionに必要なsnapshotだけを履歴として保持する。
+Issue、Pull Request、レビュー、CIをAgentDispatcherへ複製して独自正本を作ると同期問題が生じるため、GitHubを正本とし、実行に必要な時点情報だけを履歴として保持する。
 
-## AD-006 — ChatGPT Account認証済みCodex CLIを初期Execution Runtimeとする
+## AD-006 — 初期のAI実行方式にChatGPT認証済みCodex CLIを採用する
 
-**Status:** Accepted
+**状態:** 採用
 
-MVPではAgentDispatcher自身がOpenAI API keyを保持してModel APIを直接呼び出す方式を採用せず、既存のCodex CLI認証環境を利用する。
+MVPではAgentDispatcher自身がOpenAI APIキーを保持して推論モデルAPIを直接呼び出す方式を採用せず、既存のCodex CLI認証環境を利用する。
 
-Execution Runtimeは将来交換可能な境界にする。
+AI実行方式は将来交換可能な境界にする。
 
-## AD-007 — Worker credentialをControl Planeから分離する
+## AD-007 — 実行作業者の認証情報を管理基盤から分離する
 
-**Status:** Accepted
+**状態:** 採用
 
-Codex / GitHub credentialへのWeb processからの直接アクセスを避けるため、専用Worker identityで保持・実行する。
+CodexやGitHubの認証情報へWebプロセスから直接アクセスしないよう、専用Unix利用者で認証情報を保持し、その利用者としてCodexを実行する。
 
-## AD-008 — 1 Issue 1 WorktreeをExecution isolationの基本単位とする
+## AD-008 — IssueごとのGit worktreeを実行分離の基本単位とする
 
-**Status:** Accepted
+**状態:** 採用
 
-異なるIssueの同時実行によるworking tree競合を避けつつ、Git repository objectを共有して軽量に並列化するためGit worktreeを採用する。
+異なるIssueの同時実行による作業ツリー競合を避けつつ、Gitオブジェクトを共有して軽量に並列化するためGit worktreeを採用する。
 
-## AD-009 — Model RoutingをProject設定とする
+## AD-009 — 推論モデル選択をプロジェクト設定とする
 
-**Status:** Accepted
+**状態:** 採用
 
-Model世代やProject特性の変更へCore code変更なしで追従できるよう、Model identifierとReasoning EffortをProject設定として扱う。
+推論モデル世代やプロジェクト特性の変更へ中核コードの変更なしで追従できるよう、推論モデル識別子と推論レベルをプロジェクト設定として扱う。
 
-## AD-010 — Repository固有PolicyをDispatcherへ複製しない
+## AD-010 — リポジトリ固有の開発規約をAgentDispatcherへ複製しない
 
-**Status:** Accepted
+**状態:** 採用
 
-Projectごとのcoding rule、validation、bootstrapをDispatcherが保持すると二重管理になるため、対象Repository内のinstruction sourceを正本とする。
+プロジェクトごとのコーディング規約、検証方法、起動時指示をAgentDispatcherが保持すると二重管理になるため、対象リポジトリ内の指示文書を正本とする。
 
-## AD-011 — localhost-onlyを初期Security baselineとする
+## AD-011 — 初期状態ではlocalhostからのみ利用可能とする
 
-**Status:** Accepted
+**状態:** 採用
 
-MVPで不要なAuthentication / TLS / RBACの複雑性を持ち込まず、外部公開は別Architecture Decisionとして扱う。
+MVPに不要な利用者認証、TLS、権限管理の複雑性を持ち込まず、外部公開は別のアーキテクチャ判断として扱う。
