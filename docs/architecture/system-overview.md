@@ -5,99 +5,85 @@
 ```text
 Windows Browser
       │
-      │ http://localhost
+      │ localhost
       ▼
 ┌──────────────────────────────┐
 │ WSL2 Ubuntu                  │
 │                              │
-│  Nuxt SPA                    │
+│  Web UI                      │
 │      │                       │
 │      ▼                       │
-│  ASP.NET Core Control API    │
-│      │                       │
-│      ├──── SQLite            │
-│      ├──── Execution Logs    │
+│  Control API ─── Durable DB  │
 │      │                       │
 │      ▼                       │
 │  Dispatcher Worker           │
 │      │                       │
-│      ├──── GitHub CLI / Git  │
+│      ├──── GitHub / Git      │
 │      │                       │
-│      └──── systemd-run       │
+│      └──── Worker Runtime    │
 │              │               │
 │              ▼               │
-│        Codex Worker User     │
+│           Codex              │
 │              │               │
-│              ├─ Codex auth   │
-│              ├─ GitHub auth  │
 │              └─ Worktree     │
 └──────────────────────────────┘
 ```
 
-## Main Flows
+Componentの採用技術と配置は[Architecture Baseline](README.md)を正本とする。
 
-### Project Registration
+## Dispatch Flow
 
-1. User creates Project in Web UI.
-2. API validates repository identity and configuration.
-3. Worker verifies GitHub access and managed repository location.
-4. Default Route and Retention settings are stored in SQLite.
-5. Project becomes eligible for scan when Enabled.
+1. Enabled Projectがscan対象になる。
+2. GitHubからIssue Selectorに一致する候補を取得する。
+3. Active Execution、Project concurrency、health guardを適用する。
+4. ordered Routing Rulesから実行Routeを決定する。
+5. ExecutionをQueuedとして永続化する。
+6. managed repositoryを更新し、Issue worktreeを準備する。
+7. Worker healthを再確認してCodexを起動する。
+8. process stateとlogを追跡する。
+9. 終了結果をSucceeded / Failed / Canceledへ確定する。
+10. Retention Policyに従ってlocal execution assetsを整理する。
 
-### Scheduled Dispatch
+Manual dispatchも同じguardとstate machineを使用する。
 
-1. Worker finds Projects whose scan interval is due.
-2. Worker queries GitHub issues using the Project Issue Selector.
-3. Active Execution and concurrency rules are applied.
-4. Candidate Issue labels are evaluated against ordered Routing Rules.
-5. Execution is persisted as Queued.
-6. managed repository is synchronized.
-7. Issue worktree is created.
-8. Codex process is started under dedicated worker identity.
-9. stdout / stderr and state transitions are persisted.
-10. process completion updates Execution to Succeeded or Failed.
-11. Worktree cleanup policy is applied.
+## Execution State
 
-### Manual Dispatch
+```text
+Queued
+  ↓
+Preparing
+  ↓
+Running ─────→ Canceled
+  │
+  ├──────────→ Succeeded
+  └──────────→ Failed
+```
 
-Manual dispatch uses the same validation and state machine as scheduled dispatch.
-
-Web UI cannot bypass concurrency, duplicate-execution, repository health, or worker health guards.
-
-### Cancel
-
-1. User requests cancel from Web UI.
-2. API records cancel request.
-3. Worker terminates the corresponding process / transient systemd unit.
-4. Execution becomes Canceled after process termination is confirmed.
+Preparationに失敗した場合はCodexを起動せずFailedへ遷移する。
 
 ## Source of Truth
 
 | Data | Source of Truth |
 |---|---|
 | GitHub Issue / PR / Review / CI | GitHub |
-| Project configuration | AgentDispatcher SQLite |
-| Issue selector | AgentDispatcher SQLite |
-| Routing rules | AgentDispatcher SQLite |
-| Execution state/history | AgentDispatcher SQLite |
-| Full process logs | AgentDispatcher file storage |
-| Git repository | Git remote + managed local clone |
-| Codex authentication | Worker user Codex environment |
-| GitHub authentication | Worker user GitHub environment |
+| Project / selector / routing configuration | AgentDispatcher |
+| Execution state / history | AgentDispatcher |
+| Full process logs | AgentDispatcher log storage |
+| Git repository content | Git remote |
+| Codex authentication | Worker user environment |
+| GitHub authentication | Worker user environment |
 
-## Process Isolation
+## Isolation and Concurrency
 
-1 Executionにつき1 Issue worktreeを使用する。
+- 1 Executionは1 Project + 1 Issueに対応する。
+- 同一Project / IssueのActive Executionは最大1件とする。
+- 異なるIssueはProject concurrency上限内で並列実行できる。
+- 各Issueは専用worktreeを使用する。
+- Codex processはControl APIとは異なるUnix identityで実行する。
 
-同一Project / IssueにActive Executionは最大1件とする。
+## Data Layout
 
-異なるIssueはProject concurrency上限の範囲で並列実行できる。
-
-Codex processはControl API processと異なるUnix identityで実行する。
-
-## Data Root
-
-実際のpathはinstaller / configurationで決定するが、論理的には次を分離する。
+実pathはinstaller / configurationで決定する。論理配置は次とする。
 
 ```text
 data/
@@ -112,39 +98,23 @@ data/
       └─ stderr.log
 ```
 
-## Failure Handling
+## Recovery
 
-### GitHub unavailable
-
-新しいExecutionを作成しない。
-
-既存Codex processをGitHub一時障害だけで強制停止しない。
-
-### Codex unavailable / unauthenticated
-
-新しいExecutionを起動せずHost Healthへ反映する。
-
-### Process disappears
-
-Worker再起動時にActive Executionと実Processをreconcileし、存在しないprocessをRunningのまま残さない。
-
-### Worktree preparation failure
-
-Codexを起動せずExecutionをFailedにする。
-
-### Application restart
-
-Project設定、Execution履歴、cleanup期限はSQLiteから復元する。
+- **GitHub unavailable**: 新規Executionを作成しない。
+- **Codex unavailable / unauthenticated**: 新規Executionを起動せずHealthへ反映する。
+- **Process disappeared**: Worker起動時にdurable stateと実processをreconcileし、stale Runningを解消する。
+- **Worktree preparation failure**: Codexを起動せずFailedとする。
+- **Application restart**: durable stateからProject、Execution、Retention情報を復元する。
 
 ## Extension Points
 
-MVP後に次を交換・追加できる境界を維持する。
+MVP後も次を交換・追加できる境界を維持する。
 
 - Issue Provider
 - Execution Runtime
 - Remote Worker
 - Model Catalog
 - CI integration
-- Additional routing predicates
-- PostgreSQL persistence
-- Multi-user authentication
+- Routing predicates
+- Persistence provider
+- User authentication
