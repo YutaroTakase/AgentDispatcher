@@ -1,50 +1,14 @@
 # AgentDispatcher
 
-GitHub Issueを起点に、セルフホスト環境のAI coding workerへ作業をdispatchするためのローカルWebアプリケーションです。
-
-初期MVPではWSL2 Ubuntu上で動作し、複数GitHub Projectについて次を管理します。
-
-- Issue selection
-- Model / Reasoning routing
-- ChatGPTアカウント認証済みCodex CLI execution
-- IssueごとのGit worktree
-- Execution status / history / logs
-- Retention / cleanup
-- Host health
+GitHub Issueを起点に、セルフホスト環境のAI coding workerへ作業をdispatchし、実行状況と履歴をWebから管理するためのアプリケーションです。
 
 ## Documentation
 
-- [Product Brief](docs/product/product-brief.md)
-- [Product Requirements](docs/product/product-requirements.md)
-- [Architecture Baseline](docs/architecture/README.md)
-- [System Overview](docs/architecture/system-overview.md)
-- [Architecture Decisions](docs/architecture/decisions.md)
-- [Development Documentation](docs/development/README.md)
+- [Product Brief](docs/product/product-brief.md) — 目的、対象、MVP範囲
+- [Product Requirements](docs/product/product-requirements.md) — 機能要件、受入条件
+- [Architecture Baseline](docs/architecture/README.md) — 技術構成、Repository構成
+- [System Overview](docs/architecture/system-overview.md) — 実行フロー、状態、Source of Truth
+- [Architecture Decisions](docs/architecture/decisions.md) — 主要な技術判断と理由
+- [Development Documentation](docs/development/README.md) — 実装順序、検証方針
 
-## Initial Technology Baseline
-
-- Windows 11 + WSL2 Ubuntu
-- Nuxt 4 + TypeScript
-- .NET 10 / ASP.NET Core
-- .NET Worker
-- SQLite
-- systemd
-- GitHub CLI / Git
-- Codex CLI
-- Git worktree
-
-## Repository Structure
-
-FrontierEarthNeoと同様に、application / documentation / infrastructure / toolingをrootで分離します。
-
-```text
-AgentDispatcher/
-├─ .agents/
-├─ .github/
-├─ apps/
-├─ docs/
-├─ infra/
-└─ tools/
-```
-
-AgentDispatcher固有の設定・Execution履歴は保持しますが、GitHub Issue / PR / Review / CIの独自正本は作りません。
+現在有効な仕様だけをRepository内文書へ記載し、変更履歴やReview経緯はGit history、GitHub Issue、Pull Requestを参照します。
