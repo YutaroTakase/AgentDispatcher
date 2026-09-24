@@ -2,12 +2,14 @@ using AgentDispatcher.Domain.Codex;
 using AgentDispatcher.Domain.Dispatching;
 using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.GitHub;
+using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
 using AgentDispatcher.Domain.Routing;
 using AgentDispatcher.Domain.Workspaces;
 using AgentDispatcher.Infrastructure.Codex;
 using AgentDispatcher.Infrastructure.Dispatching;
 using AgentDispatcher.Infrastructure.GitHub;
+using AgentDispatcher.Infrastructure.Maintenance;
 using AgentDispatcher.Infrastructure.Persistence;
 using AgentDispatcher.Infrastructure.Processes;
 using AgentDispatcher.Infrastructure.Workspaces;
@@ -36,6 +38,7 @@ builder.Services.AddSingleton<IRoutingConfigurationRepository, SqliteRoutingConf
 builder.Services.AddSingleton<IExecutionRepository, SqliteExecutionRepository>();
 builder.Services.AddSingleton<IExecutionQueryRepository, SqliteExecutionQueryRepository>();
 builder.Services.AddSingleton<IProjectScanStateRepository, SqliteProjectScanStateRepository>();
+builder.Services.AddSingleton<IRetentionRepository, SqliteRetentionRepository>();
 builder.Services.AddSingleton<IProcessRunner, SystemProcessRunner>();
 builder.Services.AddSingleton<IGitHubIssueSource, GitHubCliClient>();
 builder.Services.AddSingleton<IGitWorkspace>(_ =>
@@ -52,6 +55,12 @@ builder.Services.AddSingleton<IWorkerHealthProbe>(_ =>
         _.GetRequiredService<IProcessRunner>(),
         workerUser));
 builder.Services.AddSingleton<IDispatchCoordinator, DispatchCoordinator>();
+builder.Services.AddSingleton<IRetentionCleanup>(_ =>
+    new RetentionCleanup(
+        _.GetRequiredService<IRetentionRepository>(),
+        _.GetRequiredService<IProjectRepository>(),
+        _.GetRequiredService<IGitWorkspace>(),
+        dataDirectory));
 builder.Services.AddHostedService<AgentDispatcher.Worker.Worker>();
 
 var host = builder.Build();

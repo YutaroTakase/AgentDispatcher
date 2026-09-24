@@ -114,6 +114,22 @@ public sealed class SqliteDatabase
                 last_scan_at_utc TEXT NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
             );
+            """),
+        new(
+            5,
+            """
+            CREATE TABLE cleanup_runs (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                started_at_utc TEXT NOT NULL,
+                finished_at_utc TEXT NOT NULL,
+                worktrees_removed INTEGER NOT NULL,
+                executions_deleted INTEGER NOT NULL,
+                error_count INTEGER NOT NULL,
+                errors_json TEXT NOT NULL
+            );
+
+            CREATE INDEX ix_cleanup_runs_finished_at
+                ON cleanup_runs(finished_at_utc DESC);
             """)
     ];
 
