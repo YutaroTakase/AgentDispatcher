@@ -1,105 +1,77 @@
 # Architecture Decisions
 
-現在有効な主要Architecture Decisionだけを記載する。
+この文書は主要な技術判断と採用理由だけを記録する。
+
+現在の構成そのものは[Architecture Baseline](README.md)を正本とする。
 
 ## AD-001 — WSL2 Self-hostedを初期Runtimeとする
 
 **Status:** Accepted
 
-初期利用者はWindows開発PC上の個人開発者とし、WSL2 Ubuntuへsystemd serviceとして導入する。
-
-クラウドControl Planeを初期必須にしない。
+初期利用者をWindows開発PC上の個人開発者とし、クラウドControl Planeを必須にせず低コストで導入できることを優先する。
 
 ## AD-002 — FrontendはNuxt 4を採用する
 
 **Status:** Accepted
 
-Next.js、Nuxt、SvelteKitを候補とし、AgentDispatcherではNuxt 4を採用する。
+Next.js、Nuxt、SvelteKitを比較し、管理画面主体でSSRを必須とせず、SPA / static outputを選択でき、ASP.NET Core APIと責務分離しやすいNuxt 4を採用する。
 
-理由:
-
-- 管理画面主体でSSRを必須としない。
-- SPA / static outputを選択できる。
-- ASP.NET Core APIと明確に責務分離できる。
-- self-hosted環境でVercel等の特定platformを前提にしない。
-- TypeScript / Vueによる管理UIを小さく開始できる。
-
-Production MVPではNuxt serverを常駐させず、SPA static assetsをASP.NET Coreから配信する構成を優先する。
+特定クラウドFrontend platformへの依存を初期要件にしない。
 
 ## AD-003 — Backend / Workerは.NET 10とする
 
 **Status:** Accepted
 
-Control APIはASP.NET Core、Dispatcher / Scheduler / Cleanupは.NET Workerを基本とする。
-
-Web request lifecycleと長時間Worker executionを分離する。
+Control APIと長時間Dispatcher処理を同一言語・runtimeで実装しつつ、Web request lifecycleとWorker execution lifecycleはprocess責務として分離する。
 
 ## AD-004 — SQLiteを初期Persistenceとする
 
 **Status:** Accepted
 
-単一Host、単一利用者、local-onlyをMVP前提とするためSQLiteを採用する。
+単一Host、単一利用者、local-onlyをMVP前提とするため、外部DB serviceを必須にしない。
 
-Project設定とExecution metadataを保存する。
-
-Full process logはDB肥大化を避けるためfile storageへ分離可能とする。
+将来のmulti-host化を妨げないようPersistence境界は分離する。
 
 ## AD-005 — GitHubをWork ItemのSource of Truthとする
 
 **Status:** Accepted
 
-AgentDispatcherはGitHub Issue / PR / Review / CIの独自正本を作らない。
+Issue / PR / Review / CIをAgentDispatcherへ複製して独自正本を作ると同期問題が生じるため、GitHubを正本としExecutionに必要なsnapshotだけを履歴として保持する。
 
-Issue selectionに必要な情報はGitHubから取得し、Execution開始時のsnapshotのみ履歴目的で保存する。
-
-## AD-006 — Codex CLIのChatGPT Account認証を利用する
+## AD-006 — ChatGPT Account認証済みCodex CLIを初期Execution Runtimeとする
 
 **Status:** Accepted
 
-MVPではOpenAI API keyをAgentDispatcherが保持して直接Model APIを呼び出す方式を採用しない。
+MVPではAgentDispatcher自身がOpenAI API keyを保持してModel APIを直接呼び出す方式を採用せず、既存のCodex CLI認証環境を利用する。
 
-専用Worker userにCodex CLIを導入し、ChatGPT accountで認証済みのCodex runtimeを起動する。
+Execution Runtimeは将来交換可能な境界にする。
 
-## AD-007 — Worker credentialをControl APIから分離する
+## AD-007 — Worker credentialをControl Planeから分離する
 
 **Status:** Accepted
 
-Codex / GitHub credentialは専用Worker userのenvironmentで保持する。
-
-Web/API identityはcredential fileへ直接アクセスしない。
-
-Dispatcherは制御されたexecution requestをWorker identityへ渡す。
+Codex / GitHub credentialへのWeb processからの直接アクセスを避けるため、専用Worker identityで保持・実行する。
 
 ## AD-008 — 1 Issue 1 WorktreeをExecution isolationの基本単位とする
 
 **Status:** Accepted
 
-異なるIssueのCodex executionは同一working treeを共有しない。
+異なるIssueの同時実行によるworking tree競合を避けつつ、Git repository objectを共有して軽量に並列化するためGit worktreeを採用する。
 
-同一Project / IssueにActive Executionは最大1件とする。
-
-## AD-009 — Model RoutingはProject設定とする
+## AD-009 — Model RoutingをProject設定とする
 
 **Status:** Accepted
 
-Model名をAgentDispatcher Coreへ固定しない。
+Model世代やProject特性の変更へCore code変更なしで追従できるよう、Model identifierとReasoning EffortをProject設定として扱う。
 
-MVPではordered label rules + default routeでModel identifier / Reasoning Effortを決定する。
-
-将来Model世代が変化してもProject設定変更だけで追従できる設計とする。
-
-## AD-010 — Repository固有開発PolicyをDispatcherへ複製しない
+## AD-010 — Repository固有PolicyをDispatcherへ複製しない
 
 **Status:** Accepted
 
-AgentDispatcherはProject固有のbootstrap、coding style、validation、review policyを持たない。
+Projectごとのcoding rule、validation、bootstrapをDispatcherが保持すると二重管理になるため、対象Repository内のinstruction sourceを正本とする。
 
-CodexがRepository内のAGENTS.md等を読み取れることを前提とし、DispatcherはIssue identityとexecution contextだけを渡す。
-
-## AD-011 — localhost-onlyをSecurity baselineとする
+## AD-011 — localhost-onlyを初期Security baselineとする
 
 **Status:** Accepted
 
-MVPはloopback accessを前提とする。
-
-LAN / Internet公開時に必要なAuthentication、TLS、RBACは別Decisionで追加する。
+MVPで不要なAuthentication / TLS / RBACの複雑性を持ち込まず、外部公開は別Architecture Decisionとして扱う。
