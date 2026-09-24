@@ -29,7 +29,7 @@ public sealed class CodexCliRunnerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RunUsesDedicatedUserModelAndReasoningEffort()
+    public async Task RunUsesDedicatedUserModelReasoningAndNetworkAccess()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var runner = new RecordingProcessRunner(
@@ -90,6 +90,9 @@ public sealed class CodexCliRunnerTests : IAsyncLifetime
         Assert.Contains("selected-model", runner.Arguments);
         Assert.Contains(
             "model_reasoning_effort=\"high\"",
+            runner.Arguments);
+        Assert.Contains(
+            "sandbox_workspace_write.network_access=true",
             runner.Arguments);
         Assert.Contains(
             runner.Arguments,
