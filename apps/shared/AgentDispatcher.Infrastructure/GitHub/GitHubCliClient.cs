@@ -172,6 +172,66 @@ public sealed class GitHubCliClient(IProcessRunner processRunner) : IGitHubIssue
         }
     }
 
+    public async Task<IssueLookupResult> GetIssueAsync(
+        Project project,
+        int issueNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (issueNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(issueNumber));
+        }
+
+        var result = await processRunner.RunAsync(
+            "gh",
+            [
+                "api",
+                $"repos/{project.Repository}/issues/{issueNumber}",
+                "--jq",
+                "{number: .number, title: .title, labels: .labels, url: .html_url, isPullRequest: has(\"pull_request\"), state: .state}"
+            ],
+            cancellationToken: cancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            if (result.StandardError.Contains("404", StringComparison.OrdinalIgnoreCase))
+            {
+                return IssueLookupResult.NotFound();
+            }
+
+            return IssueLookupResult.Failed(NormalizeError(result.StandardError));
+        }
+
+        try
+        {
+            var issue = JsonSerializer.Deserialize<IssueResponse>(
+                result.StandardOutput,
+                JsonOptions);
+
+            if (issue is null ||
+                issue.IsPullRequest ||
+                !string.Equals(issue.State, "open", StringComparison.OrdinalIgnoreCase))
+            {
+                return IssueLookupResult.NotFound();
+            }
+
+            return IssueLookupResult.Found(new IssueCandidate(
+                issue.Number,
+                issue.Title ?? string.Empty,
+                issue.Labels?
+                    .Where(label => !string.IsNullOrWhiteSpace(label.Name))
+                    .Select(label => label.Name!)
+                    .ToArray() ?? [],
+                issue.Url ?? string.Empty));
+        }
+        catch (JsonException)
+        {
+            return IssueLookupResult.Failed(
+                "GitHub CLIのIssue取得結果を解析できませんでした。");
+        }
+    }
+
     private static string NormalizeError(string error)
     {
         return string.IsNullOrWhiteSpace(error)
