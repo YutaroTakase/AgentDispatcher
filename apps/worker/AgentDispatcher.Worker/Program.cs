@@ -45,11 +45,17 @@ builder.Services.AddSingleton<IExecutionRepository, SqliteExecutionRepository>()
 builder.Services.AddSingleton<IExecutionQueryRepository, SqliteExecutionQueryRepository>();
 builder.Services.AddSingleton<IProjectScanStateRepository, SqliteProjectScanStateRepository>();
 builder.Services.AddSingleton<IRetentionRepository, SqliteRetentionRepository>();
-builder.Services.AddSingleton<IProcessRunner, SystemProcessRunner>();
+builder.Services.AddSingleton<SystemProcessRunner>();
+builder.Services.AddSingleton<IProcessRunner>(
+    provider => provider.GetRequiredService<SystemProcessRunner>());
+builder.Services.AddSingleton<IWorkerProcessRunner>(
+    provider => new SudoWorkerProcessRunner(
+        provider.GetRequiredService<IProcessRunner>(),
+        workerUser));
 builder.Services.AddSingleton<IGitHubIssueSource, GitHubCliClient>();
 builder.Services.AddSingleton<IGitWorkspace>(_ =>
     new GitWorktreeManager(
-        _.GetRequiredService<IProcessRunner>(),
+        _.GetRequiredService<IWorkerProcessRunner>(),
         dataDirectory));
 builder.Services.AddSingleton<ICodexRunner>(_ =>
     new CodexCliRunner(
@@ -60,6 +66,7 @@ builder.Services.AddSingleton<ICodexRunner>(_ =>
 builder.Services.AddSingleton<IWorkerHealthProbe>(_ =>
     new SystemWorkerHealthProbe(
         _.GetRequiredService<IProcessRunner>(),
+        _.GetRequiredService<IWorkerProcessRunner>(),
         workerUser));
 builder.Services.AddSingleton<IDispatchCoordinator, DispatchCoordinator>();
 builder.Services.AddSingleton<IRetentionCleanup>(_ =>
