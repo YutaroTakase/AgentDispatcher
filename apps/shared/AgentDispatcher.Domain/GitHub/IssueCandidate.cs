@@ -25,6 +25,18 @@ public sealed record IssueSearchResult(
         new(false, [], error);
 }
 
+public sealed record IssueLookupResult(
+    bool Success,
+    IssueCandidate? Issue,
+    string? Error)
+{
+    public static IssueLookupResult Succeeded(IssueCandidate issue) =>
+        new(true, issue, null);
+
+    public static IssueLookupResult Failed(string error) =>
+        new(false, null, error);
+}
+
 public interface IGitHubIssueSource
 {
     Task<RepositoryCheckResult> CheckRepositoryAsync(
@@ -34,5 +46,10 @@ public interface IGitHubIssueSource
     Task<IssueSearchResult> SearchIssuesAsync(
         Project project,
         IssueSelectorSettings selector,
+        CancellationToken cancellationToken = default);
+
+    Task<IssueLookupResult> GetIssueAsync(
+        Project project,
+        int issueNumber,
         CancellationToken cancellationToken = default);
 }
