@@ -185,6 +185,153 @@ public sealed class SqliteExecutionRepository(SqliteDatabase database) : IExecut
         return items;
     }
 
+    public async Task<IReadOnlyList<ExecutionRecord>> ListActiveAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var items = new List<ExecutionRecord>();
+
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = CreateSelectCommand(connection);
+        command.CommandText +=
+            " WHERE status IN ('Queued','Preparing','Running') ORDER BY created_at_utc;";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(ReadExecution(reader));
+        }
+
+        return items;
+    }
+
+    public async Task<IReadOnlyList<ExecutionRecord>> ListQueuedAsync(
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > 500)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit));
+        }
+
+        var items = new List<ExecutionRecord>();
+
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = CreateSelectCommand(connection);
+        command.CommandText +=
+            " WHERE status = 'Queued' ORDER BY created_at_utc LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", limit);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(ReadExecution(reader));
+        }
+
+        return items;
+    }
+
+    public async Task<IReadOnlyList<ExecutionRecord>> QueryAsync(
+        ExecutionQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.Limit is < 1 or > 500)
+        {
+            throw new ArgumentOutOfRangeException(nameof(query), "取得件数は1件以上500件以下で指定してください。");
+        }
+
+        var items = new List<ExecutionRecord>();
+        var conditions = new List<string>();
+
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = CreateSelectCommand(connection);
+
+        if (query.ProjectId is { } projectId)
+        {
+            conditions.Add("project_id = $projectId");
+            command.Parameters.AddWithValue("$projectId", projectId.ToString());
+        }
+
+        if (query.Status is { } status)
+        {
+            conditions.Add("status = $status");
+            command.Parameters.AddWithValue("$status", status.ToString());
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.ModelIdentifier))
+        {
+            conditions.Add("model_identifier = $modelIdentifier");
+            command.Parameters.AddWithValue("$modelIdentifier", query.ModelIdentifier.Trim());
+        }
+
+        if (query.Trigger is { } trigger)
+        {
+            conditions.Add("trigger = $trigger");
+            command.Parameters.AddWithValue("$trigger", trigger.ToString());
+        }
+
+        if (query.From is { } from)
+        {
+            conditions.Add("created_at_utc >= $from");
+            command.Parameters.AddWithValue("$from", from.ToUniversalTime().ToString("O"));
+        }
+
+        if (query.To is { } to)
+        {
+            conditions.Add("created_at_utc <= $to");
+            command.Parameters.AddWithValue("$to", to.ToUniversalTime().ToString("O"));
+        }
+
+        if (conditions.Count > 0)
+        {
+            command.CommandText += " WHERE " + string.Join(" AND ", conditions);
+        }
+
+        command.CommandText += " ORDER BY created_at_utc DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", query.Limit);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(ReadExecution(reader));
+        }
+
+        return items;
+    }
+
+    public async Task<IReadOnlyList<ExecutionRecord>> ListFinishedBeforeAsync(
+        Guid projectId,
+        DateTimeOffset cutoff,
+        CancellationToken cancellationToken = default)
+    {
+        var items = new List<ExecutionRecord>();
+
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = CreateSelectCommand(connection);
+        command.CommandText +=
+            """
+             WHERE project_id = $projectId
+               AND status IN ('Succeeded','Failed','Canceled')
+               AND finished_at_utc IS NOT NULL
+               AND finished_at_utc <= $cutoff
+             ORDER BY finished_at_utc;
+            """;
+        command.Parameters.AddWithValue("$projectId", projectId.ToString());
+        command.Parameters.AddWithValue("$cutoff", cutoff.ToUniversalTime().ToString("O"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(ReadExecution(reader));
+        }
+
+        return items;
+    }
+
     public async Task<ExecutionRecord> TransitionAsync(
         Guid id,
         ExecutionStatus targetStatus,
@@ -277,6 +424,31 @@ public sealed class SqliteExecutionRepository(SqliteDatabase database) : IExecut
 
         await transaction.CommitAsync(cancellationToken);
         return updated;
+    }
+
+    public async Task ClearWorktreePathAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "UPDATE executions SET worktree_path = NULL WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM executions WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<ExecutionEvent>> ListEventsAsync(
