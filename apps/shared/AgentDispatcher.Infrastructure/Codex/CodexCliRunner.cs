@@ -48,6 +48,8 @@ public sealed class CodexCliRunner(
             execution.ModelIdentifier,
             "--config",
             reasoningConfiguration,
+            "--config",
+            "sandbox_workspace_write.network_access=true",
             prompt
         };
 
