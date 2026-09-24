@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: .NET
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: 復元
+        run: dotnet restore apps/AgentDispatcher.slnx
+
+      - name: ビルド
+        run: dotnet build apps/AgentDispatcher.slnx --configuration Release --no-restore
+
+      - name: テスト
+        run: dotnet test apps/AgentDispatcher.slnx --configuration Release --no-build
+
+  web:
+    name: Nuxt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web/AgentDispatcher.Web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 依存関係を導入
+        run: npm install
+
+      - name: 型検査
+        run: npm run typecheck
+
+      - name: 静的解析
+        run: npm run lint
+
+      - name: ビルド
+        run: npm run build

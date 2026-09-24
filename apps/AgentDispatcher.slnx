@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="backend/AgentDispatcher.Api/AgentDispatcher.Api.csproj" />
+  <Project Path="worker/AgentDispatcher.Worker/AgentDispatcher.Worker.csproj" />
+  <Project Path="shared/AgentDispatcher.Domain/AgentDispatcher.Domain.csproj" />
+  <Project Path="shared/AgentDispatcher.Infrastructure/AgentDispatcher.Infrastructure.csproj" />
+  <Project Path="tests/AgentDispatcher.Tests/AgentDispatcher.Tests.csproj" />
+</Solution>
