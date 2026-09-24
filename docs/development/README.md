@@ -1,52 +1,52 @@
-# Development Documentation
+# 開発ドキュメント
 
-このDirectoryはAgentDispatcherの実装・検証ルールを扱う。
+このディレクトリはAgentDispatcherの実装・検証ルールを扱う。
 
-- Product requirement: [docs/product/product-requirements.md](../product/product-requirements.md)
-- Architecture: [docs/architecture/README.md](../architecture/README.md)
-- Runtime flow: [docs/architecture/system-overview.md](../architecture/system-overview.md)
+- プロダクト要件: [docs/product/product-requirements.md](../product/product-requirements.md)
+- アーキテクチャ: [docs/architecture/README.md](../architecture/README.md)
+- 実行の流れ: [docs/architecture/system-overview.md](../architecture/system-overview.md)
 
-Repository配置や採用技術はここへ重複記載しない。
+リポジトリ配置や採用技術はここへ重複記載しない。
 
-## Initial Development Order
+## 初期実装順序
 
-1. Application workspace skeleton
-2. Project domain + persistence
-3. GitHub repository / issue query integration
-4. Routing Rule domain
-5. Execution state machine
-6. Worktree manager
-7. Codex execution adapter
-8. Background scan / dispatch
-9. Execution history API
-10. Management UI
-11. Retention cleanup
-12. WSL installer / systemd integration
-13. Host health / restart recovery
+1. アプリケーション構成のひな型
+2. プロジェクト管理と永続化
+3. GitHubリポジトリ・Issue取得
+4. 推論モデル選択規則
+5. 実行状態管理
+6. 作業ツリー管理
+7. Codex実行処理
+8. 定期確認と自動実行
+9. 実行履歴API
+10. 管理画面
+11. 保存期間に基づく整理処理
+12. WSL導入スクリプトとsystemd連携
+13. 実行環境の状態確認と再起動後の復旧
 
-## Implementation Rules
+## 実装ルール
 
-- Product固有要件をCoreへ混ぜない。
-- External CLI command構築をDomainへ漏らさない。
-- GitHub、Codex、Persistence、Process Runtimeをadapter境界で分離する。
-- Execution state transitionをdurableに追跡する。
-- stdout / stderrをFailure調査可能な形で保持する。
-- DB schema変更はmigration可能にする。
-- Web UIから任意shell commandを実行する機能を追加しない。
+- プロジェクト固有要件を中核処理へ混ぜない。
+- 外部CLIのコマンド組み立てをドメイン層へ漏らさない。
+- GitHub連携、Codex実行、永続化、プロセス実行をアダプター境界で分離する。
+- 実行状態の遷移を永続化して追跡可能にする。
+- 標準出力と標準エラー出力を障害調査可能な形で保持する。
+- データベース構造の変更は移行可能にする。
+- Web画面から任意のシェルコマンドを実行する機能を追加しない。
 
-## Validation
+## 検証方針
 
-MVPでは少なくとも次を自動化対象とする。
+MVPでは少なくとも次を自動検証対象とする。
 
-- .NET build / unit tests
-- Nuxt typecheck / lint / build
-- Persistence migration tests
-- Routing Rule deterministic tests
-- duplicate dispatch concurrency tests
-- Execution state transition tests
-- Worktree lifecycle integration tests
-- Process cancellation tests
-- Retention cleanup tests
-- API smoke tests
+- .NETのビルドと単体テスト
+- Nuxtの型検査、静的解析、ビルド
+- データベース移行テスト
+- 推論モデル選択規則の決定性テスト
+- 二重実行防止の同時実行テスト
+- 実行状態遷移テスト
+- 作業ツリーの作成・削除を含む結合テスト
+- 実行取消テスト
+- 保存期間に基づく整理テスト
+- APIの疎通テスト
 
-Codex CLIの実認証を必要とするE2Eは通常のunit / integration testから分離する。
+Codex CLIの実認証を必要とするE2Eテストは、通常の単体・結合テストから分離する。
