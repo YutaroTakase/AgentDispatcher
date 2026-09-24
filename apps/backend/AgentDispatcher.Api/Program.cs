@@ -1,6 +1,10 @@
 using AgentDispatcher.Api.Projects;
+using AgentDispatcher.Domain.GitHub;
 using AgentDispatcher.Domain.Projects;
+using AgentDispatcher.Domain.Routing;
+using AgentDispatcher.Infrastructure.GitHub;
 using AgentDispatcher.Infrastructure.Persistence;
+using AgentDispatcher.Infrastructure.Processes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +17,10 @@ if (string.IsNullOrWhiteSpace(dataDirectory))
 var database = SqliteDatabase.FromFile(Path.Combine(dataDirectory, "agent-dispatcher.db"));
 builder.Services.AddSingleton(database);
 builder.Services.AddSingleton<IProjectRepository, SqliteProjectRepository>();
+builder.Services.AddSingleton<IIssueSelectorRepository, SqliteIssueSelectorRepository>();
+builder.Services.AddSingleton<IRoutingConfigurationRepository, SqliteRoutingConfigurationRepository>();
+builder.Services.AddSingleton<IProcessRunner, SystemProcessRunner>();
+builder.Services.AddSingleton<IGitHubIssueSource, GitHubCliClient>();
 
 var app = builder.Build();
 
@@ -25,6 +33,7 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.MapProjectEndpoints();
+app.MapProjectAutomationEndpoints();
 
 app.Run();
 
