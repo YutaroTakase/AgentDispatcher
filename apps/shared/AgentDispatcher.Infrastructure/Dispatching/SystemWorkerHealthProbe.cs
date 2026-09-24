@@ -4,7 +4,8 @@ using AgentDispatcher.Infrastructure.Processes;
 namespace AgentDispatcher.Infrastructure.Dispatching;
 
 public sealed class SystemWorkerHealthProbe(
-    IProcessRunner processRunner,
+    IProcessRunner systemProcessRunner,
+    IWorkerProcessRunner workerProcessRunner,
     string workerUser) : IWorkerHealthProbe
 {
     public async Task<WorkerHealthResult> CheckAsync(
@@ -15,7 +16,7 @@ public sealed class SystemWorkerHealthProbe(
             return new WorkerHealthResult(false, "Codex実行用Unix利用者が設定されていません。");
         }
 
-        var git = await processRunner.RunAsync(
+        var git = await workerProcessRunner.RunAsync(
             "git",
             ["--version"],
             cancellationToken: cancellationToken);
@@ -24,7 +25,7 @@ public sealed class SystemWorkerHealthProbe(
             return Unavailable("Gitを利用できません。", git);
         }
 
-        var github = await processRunner.RunAsync(
+        var github = await workerProcessRunner.RunAsync(
             "gh",
             ["auth", "status"],
             cancellationToken: cancellationToken);
@@ -33,7 +34,7 @@ public sealed class SystemWorkerHealthProbe(
             return Unavailable("GitHub CLIが未認証です。", github);
         }
 
-        var systemd = await processRunner.RunAsync(
+        var systemd = await systemProcessRunner.RunAsync(
             "systemctl",
             ["--version"],
             cancellationToken: cancellationToken);
@@ -42,17 +43,9 @@ public sealed class SystemWorkerHealthProbe(
             return Unavailable("systemdを利用できません。", systemd);
         }
 
-        var codex = await processRunner.RunAsync(
-            "systemd-run",
-            [
-                "--quiet",
-                "--wait",
-                "--pipe",
-                "--collect",
-                $"--uid={workerUser}",
-                "codex",
-                "--version"
-            ],
+        var codex = await workerProcessRunner.RunAsync(
+            "codex",
+            ["--version"],
             cancellationToken: cancellationToken);
         if (codex.ExitCode != 0)
         {

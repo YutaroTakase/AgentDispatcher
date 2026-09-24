@@ -30,6 +30,12 @@ if (string.IsNullOrWhiteSpace(workerUser))
     workerUser = "agent-dispatcher-worker";
 }
 
+var workerHomeDirectory = builder.Configuration["AgentDispatcher:WorkerHomeDirectory"];
+if (string.IsNullOrWhiteSpace(workerHomeDirectory))
+{
+    workerHomeDirectory = $"/var/lib/{workerUser}";
+}
+
 var database = SqliteDatabase.FromFile(Path.Combine(dataDirectory, "agent-dispatcher.db"));
 builder.Services.AddSingleton(database);
 builder.Services.AddSingleton<IProjectRepository, SqliteProjectRepository>();
@@ -49,7 +55,8 @@ builder.Services.AddSingleton<ICodexRunner>(_ =>
     new CodexCliRunner(
         _.GetRequiredService<IProcessRunner>(),
         dataDirectory,
-        workerUser));
+        workerUser,
+        workerHomeDirectory));
 builder.Services.AddSingleton<IWorkerHealthProbe>(_ =>
     new SystemWorkerHealthProbe(
         _.GetRequiredService<IProcessRunner>(),

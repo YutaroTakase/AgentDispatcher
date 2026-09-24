@@ -1,0 +1,23 @@
+[Unit]
+Description=AgentDispatcher Background Worker
+After=network-online.target agent-dispatcher-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=agent-dispatcher
+UMask=0007
+WorkingDirectory=@APP_DIR@/worker
+Environment=AgentDispatcher__DataDirectory=@DATA_DIR@
+Environment=AgentDispatcher__WorkerUser=@WORKER_USER@
+Environment=AgentDispatcher__WorkerHomeDirectory=@WORKER_HOME@
+ExecStart=@APP_DIR@/worker/AgentDispatcher.Worker
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=@DATA_DIR@ @WORKER_HOME@
+
+[Install]
+WantedBy=multi-user.target

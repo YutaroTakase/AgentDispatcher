@@ -108,7 +108,7 @@ public sealed class GitHubCliClientTests
         Assert.Contains("authentication required", result.Error);
     }
 
-    private sealed class RecordingProcessRunner(ProcessResult result) : IProcessRunner
+    private sealed class RecordingProcessRunner(ProcessResult result) : IWorkerProcessRunner
     {
         public string? FileName { get; private set; }
 

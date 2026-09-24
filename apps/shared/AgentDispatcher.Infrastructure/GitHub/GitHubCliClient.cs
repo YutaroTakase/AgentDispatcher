@@ -5,7 +5,7 @@ using AgentDispatcher.Infrastructure.Processes;
 
 namespace AgentDispatcher.Infrastructure.GitHub;
 
-public sealed class GitHubCliClient(IProcessRunner processRunner) : IGitHubIssueSource
+public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHubIssueSource
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
