@@ -158,6 +158,12 @@ public sealed class DispatchCoordinator(
     public async Task ProcessQueuedAsync(
         CancellationToken cancellationToken = default)
     {
+        var workerHealth = await health.CheckAsync(cancellationToken);
+        if (!workerHealth.Available)
+        {
+            return;
+        }
+
         var queued = await executionQueries.ListQueuedAsync(
             limit: 100,
             cancellationToken);
