@@ -1,89 +1,89 @@
-# System Overview
+# システム概要
 
-## Logical Architecture
+## 論理構成
 
 ```text
-Windows Browser
+Windows ブラウザ
       │
       │ localhost
       ▼
 ┌──────────────────────────────┐
 │ WSL2 Ubuntu                  │
 │                              │
-│  Web UI                      │
+│  Web画面                     │
 │      │                       │
 │      ▼                       │
-│  Control API ─── Durable DB  │
+│  管理API ─── 永続データ      │
 │      │                       │
 │      ▼                       │
-│  Dispatcher Worker           │
+│  常駐処理                    │
 │      │                       │
 │      ├──── GitHub / Git      │
 │      │                       │
-│      └──── Worker Runtime    │
+│      └──── 実行環境          │
 │              │               │
 │              ▼               │
 │           Codex              │
 │              │               │
-│              └─ Worktree     │
+│              └─ 作業ツリー   │
 └──────────────────────────────┘
 ```
 
-Componentの採用技術と配置は[Architecture Baseline](README.md)を正本とする。
+採用技術と配置は[アーキテクチャ](README.md)を正本とする。
 
-## Dispatch Flow
+## 実行の流れ
 
-1. Enabled Projectがscan対象になる。
-2. GitHubからIssue Selectorに一致する候補を取得する。
-3. Active Execution、Project concurrency、health guardを適用する。
-4. ordered Routing Rulesから実行Routeを決定する。
-5. ExecutionをQueuedとして永続化する。
-6. managed repositoryを更新し、Issue worktreeを準備する。
-7. Worker healthを再確認してCodexを起動する。
-8. process stateとlogを追跡する。
-9. 終了結果をSucceeded / Failed / Canceledへ確定する。
-10. Retention Policyに従ってlocal execution assetsを整理する。
+1. 有効なプロジェクトがIssue確認対象になる。
+2. GitHubからIssue取得条件に一致する候補を取得する。
+3. 実行中処理、最大同時実行数、状態確認結果を適用する。
+4. 優先順位付きの推論モデル選択規則から実行設定を決定する。
+5. 実行を「待機中」として永続化する。
+6. 管理用リポジトリを更新し、Issue専用作業ツリーを準備する。
+7. 実行環境を再確認してCodexを起動する。
+8. プロセス状態とログを追跡する。
+9. 終了結果を「成功」「失敗」「取消済み」のいずれかへ確定する。
+10. 保存期間設定に従ってローカル実行資産を整理する。
 
-Manual dispatchも同じguardとstate machineを使用する。
+手動実行も同じ検証と状態遷移を使用する。
 
-## Execution State
+## 実行状態
 
 ```text
-Queued
+待機中
   ↓
-Preparing
+準備中
   ↓
-Running ─────→ Canceled
+実行中 ─────→ 取消済み
   │
-  ├──────────→ Succeeded
-  └──────────→ Failed
+  ├─────────→ 成功
+  └─────────→ 失敗
 ```
 
-Preparationに失敗した場合はCodexを起動せずFailedへ遷移する。
+準備に失敗した場合はCodexを起動せず「失敗」へ遷移する。
 
-## Source of Truth
+## 正本
 
-| Data | Source of Truth |
+| 情報 | 正本 |
 |---|---|
-| GitHub Issue / PR / Review / CI | GitHub |
-| Project / selector / routing configuration | AgentDispatcher |
-| Execution state / history | AgentDispatcher |
-| Full process logs | AgentDispatcher log storage |
-| Git repository content | Git remote |
-| Codex authentication | Worker user environment |
-| GitHub authentication | Worker user environment |
+| GitHub Issue / Pull Request / レビュー / CI | GitHub |
+| プロジェクト設定 / Issue取得条件 / 推論モデル選択規則 | AgentDispatcher |
+| 実行状態 / 実行履歴 | AgentDispatcher |
+| 完全な実行ログ | AgentDispatcherのログ保存領域 |
+| リポジトリ内容 | Gitリモート |
+| Codex認証 | 実行作業者用Unix利用者の環境 |
+| GitHub認証 | 実行作業者用Unix利用者の環境 |
 
-## Isolation and Concurrency
+## 分離と同時実行
 
-- 1 Executionは1 Project + 1 Issueに対応する。
-- 同一Project / IssueのActive Executionは最大1件とする。
-- 異なるIssueはProject concurrency上限内で並列実行できる。
-- 各Issueは専用worktreeを使用する。
-- Codex processはControl APIとは異なるUnix identityで実行する。
+- 1回の実行は1プロジェクトと1Issueに対応する。
+- 同一プロジェクト・同一Issueの実行中処理は最大1件とする。
+- 異なるIssueはプロジェクトの最大同時実行数以内で並列実行できる。
+- 各Issueは専用作業ツリーを使用する。
+- Codexプロセスは管理APIとは異なるUnix利用者で実行する。
 
-## Data Layout
+## データ配置
 
-実pathはinstaller / configurationで決定する。論理配置は次とする。
+実際のパスは導入設定で決定する。論理配置は次とする。
 
 ```text
 data/
@@ -98,23 +98,23 @@ data/
       └─ stderr.log
 ```
 
-## Recovery
+## 障害時の扱い
 
-- **GitHub unavailable**: 新規Executionを作成しない。
-- **Codex unavailable / unauthenticated**: 新規Executionを起動せずHealthへ反映する。
-- **Process disappeared**: Worker起動時にdurable stateと実processをreconcileし、stale Runningを解消する。
-- **Worktree preparation failure**: Codexを起動せずFailedとする。
-- **Application restart**: durable stateからProject、Execution、Retention情報を復元する。
+- **GitHubへ接続できない**: 新規実行を作成しない。
+- **Codexを利用できない、または未認証**: 新規実行を起動せず状態確認画面へ反映する。
+- **実行プロセスが消失した**: 常駐処理の起動時に永続状態と実プロセスを照合し、不正な「実行中」状態を解消する。
+- **作業ツリー準備に失敗した**: Codexを起動せず「失敗」とする。
+- **AgentDispatcherを再起動した**: 永続データからプロジェクト、実行履歴、保存期限を復元する。
 
-## Extension Points
+## 将来拡張できる境界
 
-MVP後も次を交換・追加できる境界を維持する。
+MVP後も次を交換・追加できる構造を維持する。
 
-- Issue Provider
-- Execution Runtime
-- Remote Worker
-- Model Catalog
-- CI integration
-- Routing predicates
-- Persistence provider
-- User authentication
+- Issue取得元
+- AI実行方式
+- 別PC上の実行作業者
+- 推論モデル一覧
+- CI連携
+- 推論モデル選択条件
+- 永続化方式
+- 利用者認証
