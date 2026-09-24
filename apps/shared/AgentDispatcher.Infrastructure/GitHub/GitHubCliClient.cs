@@ -153,14 +153,7 @@ public sealed class GitHubCliClient(IProcessRunner processRunner) : IGitHubIssue
                 .Where(issue =>
                     !issue.IsPullRequest &&
                     string.Equals(issue.State, "open", StringComparison.OrdinalIgnoreCase))
-                .Select(issue => new IssueCandidate(
-                    issue.Number,
-                    issue.Title ?? string.Empty,
-                    issue.Labels?
-                        .Where(label => !string.IsNullOrWhiteSpace(label.Name))
-                        .Select(label => label.Name!)
-                        .ToArray() ?? [],
-                    issue.Url ?? string.Empty))
+                .Select(ToCandidate)
                 .ToArray();
 
             return IssueSearchResult.Succeeded(issues);
@@ -171,6 +164,73 @@ public sealed class GitHubCliClient(IProcessRunner processRunner) : IGitHubIssue
                 "GitHub CLIのIssue検索結果を解析できませんでした。");
         }
     }
+
+    public async Task<IssueLookupResult> GetIssueAsync(
+        Project project,
+        int issueNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (issueNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(issueNumber));
+        }
+
+        var result = await processRunner.RunAsync(
+            "gh",
+            [
+                "issue",
+                "view",
+                issueNumber.ToString(),
+                "--repo",
+                project.Repository,
+                "--json",
+                "number,title,labels,url,state"
+            ],
+            cancellationToken: cancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            return IssueLookupResult.Failed(NormalizeError(result.StandardError));
+        }
+
+        try
+        {
+            var issue = JsonSerializer.Deserialize<IssueViewResponse>(
+                result.StandardOutput,
+                JsonOptions);
+
+            if (issue is null ||
+                !string.Equals(issue.State, "open", StringComparison.OrdinalIgnoreCase))
+            {
+                return IssueLookupResult.Failed("対象Issueが存在しないか、未完了ではありません。");
+            }
+
+            return IssueLookupResult.Succeeded(new IssueCandidate(
+                issue.Number,
+                issue.Title ?? string.Empty,
+                issue.Labels?
+                    .Where(label => !string.IsNullOrWhiteSpace(label.Name))
+                    .Select(label => label.Name!)
+                    .ToArray() ?? [],
+                issue.Url ?? string.Empty));
+        }
+        catch (JsonException)
+        {
+            return IssueLookupResult.Failed(
+                "GitHub CLIのIssue取得結果を解析できませんでした。");
+        }
+    }
+
+    private static IssueCandidate ToCandidate(IssueResponse issue) =>
+        new(
+            issue.Number,
+            issue.Title ?? string.Empty,
+            issue.Labels?
+                .Where(label => !string.IsNullOrWhiteSpace(label.Name))
+                .Select(label => label.Name!)
+                .ToArray() ?? [],
+            issue.Url ?? string.Empty);
 
     private static string NormalizeError(string error)
     {
@@ -187,6 +247,13 @@ public sealed class GitHubCliClient(IProcessRunner processRunner) : IGitHubIssue
         LabelResponse[]? Labels,
         string? Url,
         bool IsPullRequest,
+        string? State);
+
+    private sealed record IssueViewResponse(
+        int Number,
+        string? Title,
+        LabelResponse[]? Labels,
+        string? Url,
         string? State);
 
     private sealed record LabelResponse(string? Name);

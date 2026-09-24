@@ -81,6 +81,15 @@ public sealed record ExecutionTransitionData(
     string? FailureSummary = null,
     string? Detail = null);
 
+public sealed record ExecutionQuery(
+    Guid? ProjectId = null,
+    ExecutionStatus? Status = null,
+    string? ModelIdentifier = null,
+    ExecutionTrigger? Trigger = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null,
+    int Limit = 100);
+
 public interface IExecutionRepository
 {
     Task<ExecutionCreateResult> TryCreateQueuedAsync(
@@ -106,5 +115,16 @@ public interface IExecutionRepository
 
     Task<IReadOnlyList<ExecutionEvent>> ListEventsAsync(
         Guid executionId,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IExecutionQueryRepository
+{
+    Task<IReadOnlyList<ExecutionRecord>> ListAsync(
+        ExecutionQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ExecutionRecord>> ListQueuedAsync(
+        int limit = 100,
         CancellationToken cancellationToken = default);
 }

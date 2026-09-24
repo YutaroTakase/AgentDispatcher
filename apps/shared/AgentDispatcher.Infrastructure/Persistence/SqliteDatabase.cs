@@ -105,6 +105,15 @@ public sealed class SqliteDatabase
 
             CREATE INDEX ix_execution_events_execution_id
                 ON execution_events(execution_id, id);
+            """),
+        new(
+            4,
+            """
+            CREATE TABLE project_scan_states (
+                project_id TEXT NOT NULL PRIMARY KEY,
+                last_scan_at_utc TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
             """)
     ];
 
