@@ -1,14 +1,14 @@
 # AgentDispatcher
 
-GitHub Issueを起点に、セルフホスト環境のAI coding workerへ作業をdispatchし、実行状況と履歴をWebから管理するためのアプリケーションです。
+GitHub Issueを起点に、セルフホスト環境のAI開発作業者へ作業を割り当て、実行状況と履歴をWeb画面から管理するためのアプリケーションです。
 
-## Documentation
+## ドキュメント
 
-- [Product Brief](docs/product/product-brief.md) — 目的、対象、MVP範囲
-- [Product Requirements](docs/product/product-requirements.md) — 機能要件、受入条件
-- [Architecture Baseline](docs/architecture/README.md) — 技術構成、Repository構成
-- [System Overview](docs/architecture/system-overview.md) — 実行フロー、状態、Source of Truth
-- [Architecture Decisions](docs/architecture/decisions.md) — 主要な技術判断と理由
-- [Development Documentation](docs/development/README.md) — 実装順序、検証方針
+- [プロダクト概要](docs/product/product-brief.md) — 目的、対象利用者、MVPの範囲
+- [プロダクト要件](docs/product/product-requirements.md) — 機能要件、受け入れ条件
+- [アーキテクチャ](docs/architecture/README.md) — 技術構成、リポジトリ構成
+- [システム概要](docs/architecture/system-overview.md) — 実行の流れ、状態、正本
+- [アーキテクチャ判断](docs/architecture/decisions.md) — 主要な技術判断と理由
+- [開発ドキュメント](docs/development/README.md) — 実装順序、検証方針
 
-現在有効な仕様だけをRepository内文書へ記載し、変更履歴やReview経緯はGit history、GitHub Issue、Pull Requestを参照します。
+リポジトリ内の文書には現在有効な仕様だけを記載し、変更履歴やレビュー経緯はGitの履歴、GitHub Issue、Pull Requestを参照します。
