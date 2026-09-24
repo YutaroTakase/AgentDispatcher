@@ -1,40 +1,41 @@
 # Architecture Baseline
 
-## Purpose
+このDirectoryはAgentDispatcherの現在有効な技術Architectureを定義する。
 
-このDirectoryはAgentDispatcherの現在有効なArchitectureを定義する。
+Product上の振る舞いは[Product Requirements](../product/product-requirements.md)、実行フローは[System Overview](system-overview.md)、採用理由は[Architecture Decisions](decisions.md)を正本とする。
 
-Product Requirementsを満たすための技術境界を扱い、変更履歴やReview経緯はGit history / GitHub Issue / Pull Requestへ残す。
+## Technology Baseline
 
-## Baseline
+- Frontend: Nuxt 4 + TypeScript
+- Control API: .NET 10 / ASP.NET Core
+- Dispatcher: .NET 10 Worker
+- Persistence: SQLite
+- Execution log: file storage
+- Source control / work item access: Git / GitHub CLI
+- Coding worker: Codex CLI
+- Service manager: systemd
+- Execution isolation: Git worktree
 
-AgentDispatcherはWSL2 Ubuntu上で動作するself-hosted local control planeとして構成する。
-
-主要component:
-
-- Nuxt 4 Web SPA
-- ASP.NET Core Control API
-- .NET Background Worker / Dispatcher
-- SQLite
-- File-based execution logs
-- GitHub CLI / Git
-- Codex CLI
-- systemd
-- Git worktree
+FrontendはSPAとしてbuildし、初期ProductionではASP.NET Coreからstatic assetsを配信する。SSRを必須としない。
 
 ## Repository Structure
-
-FENと同じroot分離を基本とする。
 
 ```text
 AgentDispatcher/
 ├─ .agents/
 ├─ .github/
 ├─ apps/
+│  ├─ AgentDispatcher.slnx
+│  ├─ Directory.Build.props
 │  ├─ web/
+│  │  └─ AgentDispatcher.Web/
 │  ├─ backend/
+│  │  └─ AgentDispatcher.Api/
 │  ├─ worker/
+│  │  └─ AgentDispatcher.Worker/
 │  ├─ shared/
+│  │  ├─ AgentDispatcher.Domain/
+│  │  └─ AgentDispatcher.Infrastructure/
 │  └─ tests/
 ├─ docs/
 │  ├─ product/
@@ -45,49 +46,25 @@ AgentDispatcher/
 ├─ infra/
 │  └─ self-hosted/
 └─ tools/
+   └─ installer/
 ```
 
-アプリケーション本体は`apps/`、導入・補助ツールは`tools/`、self-hosted runtime定義は`infra/self-hosted/`へ配置する。
+- `apps/`: application code and tests
+- `docs/`: current product, architecture, development documentation
+- `infra/`: self-hosted runtime definitions
+- `tools/`: install / update / uninstall / health tooling
+- `.github/`: repository automation
+- `.agents/`: optional AI development workflow assets
 
-## Runtime Boundary
+## Runtime Boundaries
 
-Control APIとDispatcher Workerは同じSQLiteへアクセスできるが、責務を分離する。
+- **Web / API**: configuration、query、cancel request、history
+- **Dispatcher Worker**: scan、candidate selection、worktree lifecycle、Codex process、cleanup、recovery
+- **Worker identity**: GitHub / Codex credentials and Codex execution
+- **SQLite**: AgentDispatcher-owned durable state
+- **File storage**: full execution logs
+- **GitHub**: Issue / PR / Review / CI source of truth
 
-- Web / API: Configuration、Query、Cancel request、History表示
-- Worker: Scan、Candidate selection、Worktree、Codex process、Cleanup
-- GitHub: Issue / PR等のWork Item source of truth
-- Worker user home: GitHub / Codex credential
-- SQLite: AgentDispatcher固有state
-- File storage: Execution full logs
+Control APIとDispatcherはdurable stateを共有できるが、Web request lifecycleと長時間execution lifecycleを分離する。
 
-## Frontend
-
-FrontendはNuxt 4 + TypeScriptとする。
-
-初期Productionでは管理画面をSPAとしてbuildし、ASP.NET Coreからstatic assetsを配信できる構成を優先する。
-
-SSRをProduct要件としない。
-
-## Backend
-
-Backendは.NET 10 / ASP.NET Coreを使用する。
-
-初期APIはlocal-only REST APIとする。
-
-## Worker
-
-Dispatcherは.NET 10 Workerとしてsystemd常駐する。
-
-Codex executionは専用Unix worker identityで起動し、Web/API processとcredential boundaryを分離する。
-
-## Persistence
-
-SQLiteを初期DBとする。
-
-Execution full logはDBと分離可能なfile storageへ保存する。
-
-## Further Documents
-
-- [System Overview](system-overview.md)
-- [Architecture Decisions](decisions.md)
-- [Product Requirements](../product/product-requirements.md)
+Codex executionは専用Unix identityで起動し、Web/API identityからcredentialを分離する。
