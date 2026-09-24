@@ -13,4 +13,8 @@
   <ItemGroup>
     <ProjectReference Include="../../shared/AgentDispatcher.Domain/AgentDispatcher.Domain.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
 </Project>
