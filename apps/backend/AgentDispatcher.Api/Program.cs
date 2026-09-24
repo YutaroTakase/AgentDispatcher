@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using AgentDispatcher.Api.Executions;
 using AgentDispatcher.Api.Health;
 using AgentDispatcher.Api.Maintenance;
@@ -20,6 +21,11 @@ using AgentDispatcher.Infrastructure.Processes;
 using AgentDispatcher.Infrastructure.Workspaces;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var dataDirectory = builder.Configuration["AgentDispatcher:DataDirectory"];
 if (string.IsNullOrWhiteSpace(dataDirectory))
