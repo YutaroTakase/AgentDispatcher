@@ -8,7 +8,8 @@ namespace AgentDispatcher.Infrastructure.Codex;
 public sealed class CodexCliRunner(
     IProcessRunner processRunner,
     string dataDirectory,
-    string workerUser) : ICodexRunner
+    string workerUser,
+    string workerHomeDirectory) : ICodexRunner
 {
     public string GetProcessIdentifier(Guid executionId) =>
         $"agent-dispatcher-codex-{executionId:N}";
@@ -23,6 +24,7 @@ public sealed class CodexCliRunner(
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrWhiteSpace(worktreePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(workerUser);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workerHomeDirectory);
 
         var unitName = GetProcessIdentifier(execution.Id);
         var prompt =
@@ -40,6 +42,9 @@ public sealed class CodexCliRunner(
             "--collect",
             $"--unit={unitName}",
             $"--uid={workerUser}",
+            $"--setenv=HOME={Path.GetFullPath(workerHomeDirectory)}",
+            $"--setenv=USER={workerUser}",
+            $"--setenv=LOGNAME={workerUser}",
             $"--working-directory={Path.GetFullPath(worktreePath)}",
             "codex",
             "exec",
@@ -57,8 +62,8 @@ public sealed class CodexCliRunner(
         try
         {
             result = await processRunner.RunAsync(
-                "systemd-run",
-                arguments,
+                "sudo",
+                ["--non-interactive", "systemd-run", .. arguments],
                 cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
@@ -98,8 +103,8 @@ public sealed class CodexCliRunner(
         CancellationToken cancellationToken = default)
     {
         var result = await processRunner.RunAsync(
-            "systemctl",
-            ["stop", GetProcessIdentifier(executionId)],
+            "sudo",
+            ["--non-interactive", "systemctl", "stop", GetProcessIdentifier(executionId)],
             cancellationToken: cancellationToken);
 
         if (result.ExitCode != 0 &&

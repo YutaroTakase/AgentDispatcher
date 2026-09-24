@@ -1,0 +1,24 @@
+[Unit]
+Description=AgentDispatcher Web API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agent-dispatcher
+Group=agent-dispatcher
+UMask=0007
+WorkingDirectory=@APP_DIR@/api
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5088
+Environment=AgentDispatcher__DataDirectory=@DATA_DIR@
+Environment=AgentDispatcher__WorkerUser=@WORKER_USER@
+Environment=AgentDispatcher__WorkerHomeDirectory=@WORKER_HOME@
+ExecStart=@APP_DIR@/api/AgentDispatcher.Api
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=@DATA_DIR@ @WORKER_HOME@
+
+[Install]
+WantedBy=multi-user.target

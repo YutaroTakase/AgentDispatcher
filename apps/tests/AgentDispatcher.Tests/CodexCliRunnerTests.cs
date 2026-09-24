@@ -37,7 +37,8 @@ public sealed class CodexCliRunnerTests : IAsyncLifetime
         var codex = new CodexCliRunner(
             runner,
             _directory,
-            "agent-worker");
+            "agent-worker",
+            "/home/agent-worker");
         var project = Project.Create(
             "テスト",
             "owner/repository",
@@ -83,8 +84,10 @@ public sealed class CodexCliRunnerTests : IAsyncLifetime
         Assert.Equal("実装完了", result.FinalResult);
         Assert.True(File.Exists(result.StandardOutputLogPath));
         Assert.True(File.Exists(result.StandardErrorLogPath));
-        Assert.Equal("systemd-run", runner.FileName);
+        Assert.Equal("sudo", runner.FileName);
+        Assert.Contains("systemd-run", runner.Arguments);
         Assert.Contains("--uid=agent-worker", runner.Arguments);
+        Assert.Contains("--setenv=HOME=/home/agent-worker", runner.Arguments);
         Assert.Contains("--full-auto", runner.Arguments);
         Assert.Contains("--model", runner.Arguments);
         Assert.Contains("selected-model", runner.Arguments);

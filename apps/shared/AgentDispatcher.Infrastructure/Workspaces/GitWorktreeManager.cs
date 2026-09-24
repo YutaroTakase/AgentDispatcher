@@ -5,7 +5,7 @@ using AgentDispatcher.Infrastructure.Processes;
 namespace AgentDispatcher.Infrastructure.Workspaces;
 
 public sealed class GitWorktreeManager(
-    IProcessRunner processRunner,
+    IWorkerProcessRunner processRunner,
     string dataDirectory) : IGitWorkspace
 {
     public async Task<WorktreePreparation> PrepareAsync(

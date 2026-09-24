@@ -86,7 +86,7 @@ public sealed class GitWorktreeManagerTests : IAsyncLifetime
             });
     }
 
-    private sealed class QueueProcessRunner(params ProcessResult[] results) : IProcessRunner
+    private sealed class QueueProcessRunner(params ProcessResult[] results) : IWorkerProcessRunner
     {
         private readonly Queue<ProcessResult> _results = new(results);
 
