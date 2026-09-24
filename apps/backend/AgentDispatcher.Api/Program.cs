@@ -1,9 +1,11 @@
 using AgentDispatcher.Api.Executions;
+using AgentDispatcher.Api.Maintenance;
 using AgentDispatcher.Api.Projects;
 using AgentDispatcher.Domain.Codex;
 using AgentDispatcher.Domain.Dispatching;
 using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.GitHub;
+using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
 using AgentDispatcher.Domain.Routing;
 using AgentDispatcher.Domain.Workspaces;
@@ -36,6 +38,7 @@ builder.Services.AddSingleton<IRoutingConfigurationRepository, SqliteRoutingConf
 builder.Services.AddSingleton<IExecutionRepository, SqliteExecutionRepository>();
 builder.Services.AddSingleton<IExecutionQueryRepository, SqliteExecutionQueryRepository>();
 builder.Services.AddSingleton<IProjectScanStateRepository, SqliteProjectScanStateRepository>();
+builder.Services.AddSingleton<IRetentionRepository, SqliteRetentionRepository>();
 builder.Services.AddSingleton<IProcessRunner, SystemProcessRunner>();
 builder.Services.AddSingleton<IGitHubIssueSource, GitHubCliClient>();
 builder.Services.AddSingleton<IGitWorkspace>(_ =>
@@ -67,6 +70,7 @@ app.MapProjectEndpoints();
 app.MapProjectAutomationEndpoints();
 app.MapDispatchEndpoints();
 app.MapExecutionEndpoints();
+app.MapMaintenanceEndpoints();
 
 app.Run();
 

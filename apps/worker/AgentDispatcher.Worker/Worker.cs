@@ -1,5 +1,6 @@
 using AgentDispatcher.Domain.Dispatching;
 using AgentDispatcher.Domain.Executions;
+using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
 
 namespace AgentDispatcher.Worker;
@@ -8,7 +9,8 @@ public sealed class Worker(
     ILogger<Worker> logger,
     IProjectRepository projects,
     IProjectScanStateRepository scanStates,
-    IDispatchCoordinator dispatcher) : BackgroundService
+    IDispatchCoordinator dispatcher,
+    IRetentionCleanup cleanup) : BackgroundService
 {
     private static readonly TimeSpan LoopInterval = TimeSpan.FromSeconds(15);
 
@@ -22,6 +24,7 @@ public sealed class Worker(
             {
                 await ScanDueProjectsAsync(stoppingToken);
                 await dispatcher.ProcessQueuedAsync(stoppingToken);
+                await cleanup.RunIfDueAsync(DateTimeOffset.UtcNow, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
