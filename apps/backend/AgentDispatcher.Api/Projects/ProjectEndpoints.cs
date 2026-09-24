@@ -1,4 +1,6 @@
+using AgentDispatcher.Domain.GitHub;
 using AgentDispatcher.Domain.Projects;
+using AgentDispatcher.Domain.Routing;
 
 namespace AgentDispatcher.Api.Projects;
 
@@ -25,39 +27,100 @@ public static class ProjectEndpoints
 
         group.MapPost("/", async (
             ProjectRequest request,
-            IProjectRepository repository,
+            IProjectRepository projectRepository,
+            IIssueSelectorRepository selectorRepository,
+            IRoutingConfigurationRepository routingRepository,
+            IGitHubIssueSource gitHub,
             CancellationToken cancellationToken) =>
         {
-            var validation = TryCreateProject(request, out var project);
+            var validation = TryBuildConfiguration(
+                null,
+                request,
+                out var project,
+                out var selector,
+                out var defaultRoute);
+
             if (validation is not null)
             {
                 return validation;
             }
 
-            await repository.AddAsync(project!, cancellationToken);
+            var repositoryCheck = await gitHub.CheckRepositoryAsync(
+                project!,
+                cancellationToken);
+            if (!repositoryCheck.Success)
+            {
+                return Results.UnprocessableEntity(new
+                {
+                    message = repositoryCheck.Error
+                });
+            }
+
+            await projectRepository.AddAsync(project!, cancellationToken);
+
+            try
+            {
+                await selectorRepository.UpsertAsync(selector!, cancellationToken);
+                await routingRepository.UpsertDefaultRouteAsync(
+                    project!.Id,
+                    defaultRoute!,
+                    cancellationToken);
+            }
+            catch
+            {
+                await projectRepository.DeleteAsync(project!.Id, CancellationToken.None);
+                throw;
+            }
+
             return Results.Created($"/api/projects/{project!.Id}", ToResponse(project));
         });
 
         group.MapPut("/{id:guid}", async (
             Guid id,
             ProjectRequest request,
-            IProjectRepository repository,
+            IProjectRepository projectRepository,
+            IIssueSelectorRepository selectorRepository,
+            IRoutingConfigurationRepository routingRepository,
+            IGitHubIssueSource gitHub,
             CancellationToken cancellationToken) =>
         {
-            var current = await repository.GetAsync(id, cancellationToken);
+            var current = await projectRepository.GetAsync(id, cancellationToken);
             if (current is null)
             {
                 return Results.NotFound();
             }
 
-            var validation = TryUpdateProject(current, request, out var updated);
+            var validation = TryBuildConfiguration(
+                current,
+                request,
+                out var project,
+                out var selector,
+                out var defaultRoute);
+
             if (validation is not null)
             {
                 return validation;
             }
 
-            await repository.UpdateAsync(updated!, cancellationToken);
-            return Results.Ok(ToResponse(updated!));
+            var repositoryCheck = await gitHub.CheckRepositoryAsync(
+                project!,
+                cancellationToken);
+            if (!repositoryCheck.Success)
+            {
+                return Results.UnprocessableEntity(new
+                {
+                    message = repositoryCheck.Error
+                });
+            }
+
+            await projectRepository.UpdateAsync(project!, cancellationToken);
+            await selectorRepository.UpsertAsync(selector!, cancellationToken);
+            await routingRepository.UpsertDefaultRouteAsync(
+                project!.Id,
+                defaultRoute!,
+                cancellationToken);
+
+            return Results.Ok(ToResponse(project));
         });
 
         group.MapDelete("/{id:guid}", async (
@@ -73,53 +136,63 @@ public static class ProjectEndpoints
         return endpoints;
     }
 
-    private static IResult? TryCreateProject(ProjectRequest request, out Project? project)
+    private static IResult? TryBuildConfiguration(
+        Project? current,
+        ProjectRequest request,
+        out Project? project,
+        out IssueSelectorSettings? selector,
+        out ExecutionRoute? defaultRoute)
     {
         try
         {
-            project = Project.Create(
-                request.DisplayName,
-                request.Repository,
-                request.Enabled,
-                request.DefaultBranch,
-                request.IssueScanIntervalMinutes,
-                request.MaxConcurrentExecutions,
-                request.ExecutionRetentionDays,
-                request.FailureWorktreeRetentionDays);
-            return null;
-        }
-        catch (ArgumentException exception)
-        {
-            project = null;
-            return ValidationProblem(exception);
-        }
-    }
+            project = current is null
+                ? Project.Create(
+                    request.DisplayName,
+                    request.Repository,
+                    request.Enabled,
+                    request.DefaultBranch,
+                    request.IssueScanIntervalMinutes,
+                    request.MaxConcurrentExecutions,
+                    request.ExecutionRetentionDays,
+                    request.FailureWorktreeRetentionDays)
+                : current.Update(
+                    request.DisplayName,
+                    request.Repository,
+                    request.Enabled,
+                    request.DefaultBranch,
+                    request.IssueScanIntervalMinutes,
+                    request.MaxConcurrentExecutions,
+                    request.ExecutionRetentionDays,
+                    request.FailureWorktreeRetentionDays);
 
-    private static IResult? TryUpdateProject(Project current, ProjectRequest request, out Project? project)
-    {
-        try
-        {
-            project = current.Update(
-                request.DisplayName,
-                request.Repository,
-                request.Enabled,
-                request.DefaultBranch,
-                request.IssueScanIntervalMinutes,
-                request.MaxConcurrentExecutions,
-                request.ExecutionRetentionDays,
-                request.FailureWorktreeRetentionDays);
+            selector = IssueSelectorSettings.Create(
+                project.Id,
+                request.IssueQueryFragment,
+                request.IssueSortField,
+                request.IssueSortOrder,
+                request.MaxCandidatesPerScan);
+
+            defaultRoute = ExecutionRoute.Create(
+                request.DefaultModelIdentifier,
+                request.DefaultReasoningEffort);
+
             return null;
         }
         catch (ArgumentException exception)
         {
             project = null;
+            selector = null;
+            defaultRoute = null;
             return ValidationProblem(exception);
         }
     }
 
     private static IResult ValidationProblem(ArgumentException exception)
     {
-        var key = string.IsNullOrWhiteSpace(exception.ParamName) ? "project" : exception.ParamName;
+        var key = string.IsNullOrWhiteSpace(exception.ParamName)
+            ? "project"
+            : exception.ParamName;
+
         return Results.ValidationProblem(new Dictionary<string, string[]>
         {
             [key] = [exception.Message]
@@ -149,7 +222,13 @@ public sealed record ProjectRequest(
     int IssueScanIntervalMinutes,
     int MaxConcurrentExecutions,
     int ExecutionRetentionDays,
-    int FailureWorktreeRetentionDays);
+    int FailureWorktreeRetentionDays,
+    string? IssueQueryFragment,
+    string IssueSortField,
+    string IssueSortOrder,
+    int MaxCandidatesPerScan,
+    string DefaultModelIdentifier,
+    string DefaultReasoningEffort);
 
 public sealed record ProjectResponse(
     Guid Id,

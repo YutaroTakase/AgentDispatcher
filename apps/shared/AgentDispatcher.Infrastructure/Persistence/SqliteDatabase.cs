@@ -24,6 +24,40 @@ public sealed class SqliteDatabase
             );
 
             CREATE INDEX ix_projects_enabled ON projects(enabled);
+            """),
+        new(
+            2,
+            """
+            CREATE TABLE project_issue_selectors (
+                project_id TEXT NOT NULL PRIMARY KEY,
+                query_fragment TEXT NOT NULL,
+                sort_field TEXT NOT NULL,
+                sort_order TEXT NOT NULL,
+                max_candidates_per_scan INTEGER NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE project_default_routes (
+                project_id TEXT NOT NULL PRIMARY KEY,
+                model_identifier TEXT NOT NULL,
+                reasoning_effort TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE routing_rules (
+                id TEXT NOT NULL PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                rule_order INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                required_labels_json TEXT NOT NULL,
+                excluded_labels_json TEXT NOT NULL,
+                model_identifier TEXT NOT NULL,
+                reasoning_effort TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX ix_routing_rules_project_order
+                ON routing_rules(project_id, rule_order, id);
             """)
     ];
 
@@ -46,7 +80,8 @@ public sealed class SqliteDatabase
         {
             DataSource = fullPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            ForeignKeys = true
         }.ToString();
 
         return new SqliteDatabase(connectionString);
@@ -60,7 +95,6 @@ public sealed class SqliteDatabase
         await ExecuteAsync(
             connection,
             """
-            PRAGMA foreign_keys = ON;
             CREATE TABLE IF NOT EXISTS schema_migrations (
                 version INTEGER NOT NULL PRIMARY KEY,
                 applied_at_utc TEXT NOT NULL
