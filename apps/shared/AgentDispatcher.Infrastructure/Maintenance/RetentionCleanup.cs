@@ -1,3 +1,4 @@
+using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
 using AgentDispatcher.Domain.Workspaces;
@@ -44,7 +45,7 @@ public sealed class RetentionCleanup(
                 continue;
             }
 
-            var worktreeExpired = candidate.Status == Domain.Executions.ExecutionStatus.Succeeded ||
+            var worktreeExpired = candidate.Status == ExecutionStatus.Succeeded ||
                 candidate.FinishedAt <= now.AddDays(-candidate.FailureWorktreeRetentionDays);
 
             if (worktreeExpired)
