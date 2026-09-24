@@ -4,19 +4,18 @@
 
 AgentDispatcher MVPは、複数GitHub Repositoryに対するCodex execution dispatcherを提供する。
 
-対象Runtimeは、WSL2 Ubuntu上にインストールされたChatGPTアカウント認証済みCodex CLIとする。
+初期RuntimeはWSL2 Ubuntu上のChatGPTアカウント認証済みCodex CLIとする。
 
-## 2. Project
+技術構成の正本は[Architecture Baseline](../architecture/README.md)とする。
 
-### 2.1 Project登録
+## 2. Project Management
 
 ユーザーはWeb UIからProjectを登録、編集、一時停止、削除できる。
 
-Projectは最低限次を保持する。
+Projectは最低限次を設定できる。
 
-- Project ID
 - Display Name
-- GitHub Repository（owner/repository）
+- GitHub Repository
 - Enabled
 - Default Branch
 - Issue Scan Interval
@@ -24,114 +23,74 @@ Projectは最低限次を保持する。
 - Execution Retention Days
 - Failure Worktree Retention Days
 
-Repository URLやowner/repositoryはGitHub上で到達可能であることを登録時に検証する。
+登録時にRepositoryとDefault Branchへ到達可能であることを検証する。
 
-### 2.2 Repository管理
+AgentDispatcherはProjectごとのmanaged repository cloneとIssueごとのworktreeを管理する。
 
-AgentDispatcherはProjectごとのmanaged repository cloneとIssueごとのworktreeをデータ領域配下で管理する。
-
-ユーザーが任意のローカル作業Directoryを指定することをMVP必須要件にしない。
-
-## 3. GitHub Integration
-
-### 3.1 認証
-
-GitHub操作は専用Workerユーザーで認証済みのGitHub CLIまたは同等のcredential helperを使用する。
-
-GitHub tokenをAgentDispatcher DBへ保存しない。
-
-### 3.2 Issue Selector
+## 3. Issue Selection
 
 ProjectごとにGitHub Issue Search条件を設定できる。
 
-MVPでは次を設定可能とする。
+MVPでは次を設定対象とする。
 
 - Query fragment
 - Sort field
 - Sort order
 - Max candidates per scan
 
-Repository scopeはProject設定からAgentDispatcherが付与する。
+Repository scopeはProject設定から自動付与する。
 
-実行候補はGitHub上でopenなIssueに限定する。
+dispatch対象はopenなIssueに限定し、Pull Requestは候補に含めない。
 
-Pull RequestはIssue候補としてdispatchしない。
+次の場合は新規dispatchしない。
 
-### 3.3 Dispatch exclusion
-
-次のIssueは候補から除外する。
-
-- 同一Project / IssueでExecutionがQueued、Preparing、Runningのもの
+- 同一Project / IssueにActive Executionがある
 - ProjectがDisabled
-- Project concurrency上限到達時
-- Repository / GitHub health checkに失敗している場合
+- Project concurrency上限に達している
+- 必要なGitHub / Repository health checkに失敗している
 
 ## 4. Model Routing
 
-### 4.1 Default Route
+ProjectはDefault Routeを1つ持ち、必要に応じてordered Routing Rulesを複数定義できる。
 
-Projectは必ずDefault Routeを1つ持つ。
-
-Routeは最低限次を保持する。
+Routeは次を保持する。
 
 - Model identifier
 - Reasoning effort
 
-Model identifierは特定世代へハードコードせず、Codex CLIへ渡せる文字列として保持する。
+Model identifierは特定Model世代へ固定せず、Codex Runtimeへ渡せる設定値として扱う。
 
-### 4.2 Routing Rules
+MVPのRouting Rule条件はIssue labelとする。
 
-Default Routeより前に評価するordered Routing Rulesを複数定義できる。
+各Ruleは次を設定できる。
 
-MVPの条件はIssue labelベースとする。
-
-各Ruleは次を持つ。
-
-- Priority / order
+- Order
 - Required labels
 - Excluded labels
 - Model identifier
 - Reasoning effort
 - Enabled
 
-上から順に評価し、最初に一致したRuleを採用する。
+Ruleは上から順に評価し、最初の一致を採用する。一致しない場合はDefault Routeを採用する。
 
-一致RuleがなければDefault Routeを採用する。
+Executionには実行時のRoute判定をsnapshotとして保存する。
 
-### 4.3 Route evidence
+## 5. Dispatch
 
-Executionには、どのRuleまたはDefaultが選択されたかをsnapshotとして保存する。
+Enabled Projectは設定された分単位intervalでscanする。
 
-後からProject設定が変更されても過去ExecutionのRoute判定を再現できるようにする。
+scanではIssue Selectorに一致する候補から、Project concurrencyの空き数まで決定的な順序でExecutionを作成する。
 
-## 5. Scheduling / Dispatch
+ユーザーはWeb UIから次を手動実行できる。
 
-### 5.1 Scan
+- Project scan
+- 特定Issueのdispatch
 
-Background WorkerはEnabled Projectを設定されたintervalでscanする。
-
-MVPではcron式ではなく、分単位intervalを基本とする。
-
-### 5.2 Candidate selection
-
-1回のscanで取得した候補から、Project concurrencyに空きがある分だけExecutionを作成する。
-
-候補選択は設定されたsort/orderに従い決定的に行う。
-
-### 5.3 Manual trigger
-
-ユーザーはWeb UIから次を実行できる。
-
-- Project scanを今すぐ実行
-- 特定Issueを手動dispatch
-
-手動dispatchでも同一Issue排他、Project concurrency、health checkを迂回しない。
+手動実行も通常の排他、concurrency、health checkを迂回しない。
 
 ## 6. Execution
 
-### 6.1 State
-
-Executionは最低限次の状態を持つ。
+Executionは次の状態を持つ。
 
 - Queued
 - Preparing
@@ -140,74 +99,35 @@ Executionは最低限次の状態を持つ。
 - Failed
 - Canceled
 
-状態遷移は履歴として記録する。
+Preparingでは、最新Default Branchの取得、Issue worktree準備、Worker health確認、Routing snapshot確定を完了してからCodexを起動する。
 
-### 6.2 Preparation
+1つのExecutionは1つのProjectと1つのIssueに対応し、Issue専用worktreeをworking directoryとして使用する。
 
-Preparingでは最低限次を行う。
+DispatcherはCodexへ最低限次を渡す。
 
-1. managed repositoryのremote更新
-2. Project default branchの最新revision確定
-3. Issue専用worktree作成または安全な再利用
-4. Worker health再確認
-5. Model Routing snapshot確定
-
-準備に失敗した場合、Codexを起動せずFailedとする。
-
-### 6.3 Worktree isolation
-
-ExecutionはIssue専用worktreeをworking directoryとしてCodexを起動する。
-
-異なるIssueのCodex processが同一working treeを共有しない。
-
-### 6.4 Codex invocation
-
-MVPはnon-interactiveなCodex CLI executionを利用する。
-
-Dispatcherは最低限次を指定する。
-
-- working directory
+- Project / Repository identity
+- target Issue identifier
 - selected model
 - selected reasoning effort
-- target Issue identifier
-- Project / Repository identity
+- working directory
 
-Repository固有の詳細な開発指示をDispatcher promptへ複製しない。
+Repository固有の開発PolicyをDispatcher promptへ複製しない。
 
-Repository側のAGENTS.md等のinstruction sourceをCodexが利用できる構造とする。
-
-### 6.5 Process control
-
-DispatcherはCodex processについて最低限次を管理する。
-
-- process start
-- process identifier
-- stdout
-- stderr
-- exit code
-- start time
-- finish time
-- cancel
+Dispatcherはprocess start、process identifier、stdout、stderr、exit code、開始・終了時刻、cancelを管理する。
 
 MVPではPause / Resume / interactive approval UIを必須としない。
 
 ## 7. Execution History
-
-### 7.1 保存情報
 
 Executionには最低限次を保存する。
 
 - Execution ID
 - Project ID
 - Issue number
-- Issue title snapshot
-- Issue label snapshot
-- Trigger type（Scheduled / Manual）
-- Routing rule snapshot
-- Model
-- Reasoning effort
+- Issue title / label snapshot
+- Trigger type
+- Route snapshot
 - Base revision
-- Worktree path
 - Status
 - StartedAt / FinishedAt
 - Exit code
@@ -215,11 +135,7 @@ Executionには最低限次を保存する。
 - stdout / stderr log reference
 - Failure summary
 
-### 7.2 一覧
-
-Web UIからProject横断でExecution一覧を確認できる。
-
-最低限次でfilterできる。
+Web UIからProject横断でExecution一覧を確認でき、最低限次でfilterできる。
 
 - Project
 - Status
@@ -227,49 +143,35 @@ Web UIからProject横断でExecution一覧を確認できる。
 - Trigger type
 - Date range
 
-### 7.3 詳細
-
-Execution詳細では次を確認できる。
-
-- Issueへのlink
-- selected route
-- state timeline
-- final result
-- stdout / stderr
-- start / finish / duration
-- failure information
+Execution詳細ではIssue link、Route、state timeline、result、log、duration、failure informationを確認できる。
 
 ## 8. Retention
 
-ProjectごとにExecution retention daysを設定できる。
+ProjectごとにExecution履歴と失敗Worktreeの保存期間を設定できる。
 
-Retention期限を超えたExecutionについて、Background cleanupが保存データとlogを削除する。
+Background cleanupは期限を超えたAgentDispatcher固有データ、log、local worktreeを削除する。
 
-成功Executionのworktreeは終了後速やかに削除可能とする。
+GitHub上のIssue、branch、PR、commitはRetention処理で削除しない。
 
-失敗ExecutionのworktreeはProject設定の日数だけ保持し、調査後にcleanupする。
+## 9. Health
 
-RetentionでGitHub上のIssue、branch、PR、commitを削除しない。
+Web UIからHost Healthとして最低限次を確認できる。
 
-## 9. Host Health
-
-Web UIから最低限次の状態を確認できる。
-
-- Git available
-- GitHub CLI available
-- GitHub authenticated
-- Codex CLI available
-- Codex authenticated / usable
-- systemd available
-- data directory writable
+- Git
+- GitHub CLI
+- GitHub authentication
+- Codex CLI
+- Codex authentication / usability
+- systemd
+- data directory write access
 - free disk space
 
-Projectごとに最低限次を確認できる。
+Project Healthとして最低限次を確認できる。
 
-- GitHub Repository reachable
-- default branch reachable
+- Repository reachability
+- Default Branch reachability
 - managed repository sync
-- worktree root writable
+- worktree root write access
 
 ## 10. Web UI
 
@@ -283,98 +185,52 @@ MVPは最低限次の画面を持つ。
 - Execution Detail
 - Host Health
 
-Dashboardでは少なくともRunning / Failed / Recent executionsとProject healthを確認できる。
+DashboardではRunning / Failed / Recent executionsとProject healthを確認できる。
 
-## 11. Installation
+## 11. Installation and Access
 
-### 11.1 Supported environment
+初期サポート対象はWindows 11 + WSL2 Ubuntuで、systemdを利用可能であることを前提とする。
 
-初期サポート対象:
+RepositoryはWSL向けinstallerを提供し、必要componentの導入または利用可否確認を行う。
 
-- Windows 11
-- WSL2
-- Ubuntu
-- systemd enabled
+GitHub / ChatGPTへの対話ログインをcredentialコピーで自動化しない。
 
-### 11.2 Installer
+初期状態のWeb UIはlocalhostからのみ利用可能とし、LAN / Internet公開はMVP対象外とする。
 
-RepositoryはWSL向けinstallerを提供する。
+## 12. Persistence and Source of Truth
 
-Installerは最低限次を実施または検証する。
+AgentDispatcherはProject設定、Routing設定、Execution、Execution event、Retention metadataを保持する。
 
-- AgentDispatcher service user / worker user
-- application files
-- data directories
-- systemd services
-- .NET runtime
-- Node.js build prerequisites
-- Git
-- GitHub CLI
-- Codex CLI
+GitHub Issue / PR / Review / CIの独自正本を作らない。
 
-ChatGPT / GitHubへのログインそのものをcredentialのコピーで自動化しない。
-
-必要な対話ログイン手順を案内し、Health Checkで利用可能性を検証する。
-
-### 11.3 Network
-
-初期状態ではlocalhostからのみ利用可能とする。
-
-LAN / Internetへ公開する構成はMVP対象外とする。
-
-## 12. Persistence
-
-MVPはSQLiteを使用する。
-
-SQLiteへ保存するのはAgentDispatcher固有の次のデータを中心とする。
-
-- Projects
-- Issue selector settings
-- Routing settings
-- Executions
-- Execution events
-- Retention metadata
-
-GitHub Issue / PR / CIの独自コピーを正本として保持しない。
-
-Full stdout / stderrはDBへ無制限に格納せず、file storageとmetadataを分離可能な設計とする。
+Full stdout / stderrは無制限にDBへ格納せず、log storageとmetadataを分離できること。
 
 ## 13. Security
 
 - Web processとCodex worker processのUnix identityを分離する。
 - Worker credentialをWeb processへ露出しない。
-- ChatGPT credentialをDBへ保存しない。
-- GitHub credentialをDBへ保存しない。
+- ChatGPT credentialをAgentDispatcher DBへ保存しない。
+- GitHub credentialをAgentDispatcher DBへ保存しない。
 - Codexは対象worktreeをworking directoryとして実行する。
-- Web UIから任意shell commandを入力・実行する機能をMVPに含めない。
-- AgentDispatcher repositoryへsecretをcommitしない。
+- Web UIから任意shell commandを入力・実行できない。
+- SecretをRepositoryへcommitしない。
 
-## 14. Non-functional Requirements
-
-### Reliability
+## 14. Reliability and Observability
 
 - service restart後もProject設定とExecution履歴を保持する。
-- Running process消失を検出し、Executionを永続的にRunningのまま残さない。
+- process消失を検出し、Executionを永続的にRunningのまま残さない。
 - 同一Issueの二重dispatchを防止する。
+- Application log、Dispatcher decision、Execution state transition、cleanup resultを確認可能にする。
 
-### Observability
+## 15. Maintainability
 
-- Application log
-- Dispatcher decision log
-- Execution state transition
-- cleanup result
+- 特定Project名、label名、Model名をCoreへハードコードしない。
+- GitHub access、Codex execution、Persistence、Process Runtimeを交換可能な境界として分離する。
+- Project固有の開発Policyは対象Repository側へ保持する。
 
-を確認可能にする。
+## 16. MVP Acceptance Criteria
 
-### Maintainability
-
-特定Project名、特定label名、特定Model名をCoreへハードコードしない。
-
-GitHub access、Codex execution、Persistenceを交換可能な境界として分離する。
-
-## 15. MVP Acceptance Criteria
-
-- [ ] WSL2 Ubuntuへinstallerで導入できる。
+- [ ] 対応WSL環境へinstallerで導入できる。
 - [ ] localhostのWeb UIへアクセスできる。
 - [ ] GitHub RepositoryをProject登録できる。
 - [ ] Issue Selectorで対象Issueを取得できる。
@@ -382,6 +238,6 @@ GitHub access、Codex execution、Persistenceを交換可能な境界として�
 - [ ] ChatGPT認証済みCodex CLIをIssue専用worktreeで起動できる。
 - [ ] 同一Issueを二重実行しない。
 - [ ] Executionの成功 / 失敗 / cancelを記録できる。
-- [ ] Execution一覧と詳細、stdout / stderr、final resultを確認できる。
-- [ ] ProjectごとのRetention Policyで履歴とlogをcleanupできる。
-- [ ] Host HealthでGitHub / Codex利用可否を確認できる。
+- [ ] Execution一覧、詳細、stdout / stderr、final resultを確認できる。
+- [ ] ProjectごとのRetention Policyで履歴、log、local worktreeをcleanupできる。
+- [ ] Host / Project Healthを確認できる。
