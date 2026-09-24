@@ -58,6 +58,53 @@ public sealed class SqliteDatabase
 
             CREATE INDEX ix_routing_rules_project_order
                 ON routing_rules(project_id, rule_order, id);
+            """),
+        new(
+            3,
+            """
+            CREATE TABLE executions (
+                id TEXT NOT NULL PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                issue_title TEXT NOT NULL,
+                issue_labels_json TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                model_identifier TEXT NOT NULL,
+                reasoning_effort TEXT NOT NULL,
+                matched_rule_id TEXT NULL,
+                base_revision TEXT NULL,
+                worktree_path TEXT NULL,
+                status TEXT NOT NULL,
+                process_identifier TEXT NULL,
+                created_at_utc TEXT NOT NULL,
+                started_at_utc TEXT NULL,
+                finished_at_utc TEXT NULL,
+                exit_code INTEGER NULL,
+                final_result TEXT NULL,
+                stdout_log_path TEXT NULL,
+                stderr_log_path TEXT NULL,
+                failure_summary TEXT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+
+            CREATE UNIQUE INDEX ux_executions_active_project_issue
+                ON executions(project_id, issue_number)
+                WHERE status IN ('Queued', 'Preparing', 'Running');
+
+            CREATE INDEX ix_executions_project_status_created
+                ON executions(project_id, status, created_at_utc DESC);
+
+            CREATE TABLE execution_events (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                execution_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                occurred_at_utc TEXT NOT NULL,
+                detail TEXT NULL,
+                FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX ix_execution_events_execution_id
+                ON execution_events(execution_id, id);
             """)
     ];
 

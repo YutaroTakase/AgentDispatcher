@@ -2,6 +2,10 @@ namespace AgentDispatcher.Domain.Routing;
 
 public sealed record ExecutionRoute
 {
+    private static readonly HashSet<string> AllowedReasoningEfforts = new(
+        ["minimal", "low", "medium", "high", "xhigh"],
+        StringComparer.OrdinalIgnoreCase);
+
     private ExecutionRoute(string modelIdentifier, string reasoningEffort)
     {
         ModelIdentifier = modelIdentifier;
@@ -21,17 +25,18 @@ public sealed record ExecutionRoute
                 nameof(modelIdentifier));
         }
 
-        if (string.IsNullOrWhiteSpace(reasoningEffort) || reasoningEffort.Trim().Length > 32)
+        var normalizedEffort = reasoningEffort?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedEffort) ||
+            !AllowedReasoningEfforts.Contains(normalizedEffort))
         {
             throw new ArgumentException(
-                "推論レベルは1文字以上32文字以下で指定してください。",
+                "推論レベルは minimal、low、medium、high、xhigh のいずれかで指定してください。",
                 nameof(reasoningEffort));
         }
 
-        return new ExecutionRoute(modelIdentifier.Trim(), reasoningEffort.Trim().ToLowerInvariant());
+        return new ExecutionRoute(modelIdentifier.Trim(), normalizedEffort);
     }
 }
-
 public sealed record RoutingDecision(
     ExecutionRoute Route,
     Guid? MatchedRuleId);
