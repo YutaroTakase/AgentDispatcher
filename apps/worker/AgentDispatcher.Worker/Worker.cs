@@ -2,6 +2,7 @@ using AgentDispatcher.Domain.Dispatching;
 using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
+using AgentDispatcher.Domain.Recovery;
 
 namespace AgentDispatcher.Worker;
 
@@ -10,7 +11,8 @@ public sealed class Worker(
     IProjectRepository projects,
     IProjectScanStateRepository scanStates,
     IDispatchCoordinator dispatcher,
-    IRetentionCleanup cleanup) : BackgroundService
+    IRetentionCleanup cleanup,
+    IExecutionRecovery recovery) : BackgroundService
 {
     private static readonly TimeSpan LoopInterval = TimeSpan.FromSeconds(15);
 
@@ -22,6 +24,19 @@ public sealed class Worker(
         {
             try
             {
+                var recoveryResult = await recovery.ReconcileAsync(stoppingToken);
+                if (recoveryResult.PreparingFailed > 0 ||
+                    recoveryResult.RunningFailed > 0 ||
+                    recoveryResult.Errors.Count > 0)
+                {
+                    logger.LogWarning(
+                        "復旧処理: 準備中失敗={PreparingFailed}, 実行中失敗={RunningFailed}, 実行継続={RunningActive}, エラー={ErrorCount}",
+                        recoveryResult.PreparingFailed,
+                        recoveryResult.RunningFailed,
+                        recoveryResult.RunningStillActive,
+                        recoveryResult.Errors.Count);
+                }
+
                 await ScanDueProjectsAsync(stoppingToken);
                 await dispatcher.ProcessQueuedAsync(stoppingToken);
                 await cleanup.RunIfDueAsync(DateTimeOffset.UtcNow, stoppingToken);

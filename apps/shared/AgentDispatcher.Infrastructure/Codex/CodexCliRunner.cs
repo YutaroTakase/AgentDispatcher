@@ -98,6 +98,18 @@ public sealed class CodexCliRunner(
             unitName);
     }
 
+    public async Task<bool> IsRunningAsync(
+        Guid executionId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await processRunner.RunAsync(
+            "systemctl",
+            ["is-active", "--quiet", GetProcessIdentifier(executionId)],
+            cancellationToken: cancellationToken);
+
+        return result.ExitCode == 0;
+    }
+
     public async Task CancelAsync(
         Guid executionId,
         CancellationToken cancellationToken = default)

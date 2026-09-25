@@ -22,6 +22,7 @@ check "常駐サービス" systemctl is-active --quiet agent-dispatcher-worker.s
 check "Git" sudo --non-interactive --set-home --user "$WORKER_USER" -- git --version
 check "GitHub認証" sudo --non-interactive --set-home --user "$WORKER_USER" -- gh auth status
 check "Codex" sudo --non-interactive --set-home --user "$WORKER_USER" -- codex --version
+check "Codex認証" sudo --non-interactive --set-home --user "$WORKER_USER" -- codex login status
 check "データ領域" test -w "$DATA_DIR"
 
 if command -v curl >/dev/null 2>&1; then

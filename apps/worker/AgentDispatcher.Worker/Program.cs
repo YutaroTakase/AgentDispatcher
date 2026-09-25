@@ -4,6 +4,7 @@ using AgentDispatcher.Domain.Executions;
 using AgentDispatcher.Domain.GitHub;
 using AgentDispatcher.Domain.Maintenance;
 using AgentDispatcher.Domain.Projects;
+using AgentDispatcher.Domain.Recovery;
 using AgentDispatcher.Domain.Routing;
 using AgentDispatcher.Domain.Workspaces;
 using AgentDispatcher.Infrastructure.Codex;
@@ -12,6 +13,7 @@ using AgentDispatcher.Infrastructure.GitHub;
 using AgentDispatcher.Infrastructure.Maintenance;
 using AgentDispatcher.Infrastructure.Persistence;
 using AgentDispatcher.Infrastructure.Processes;
+using AgentDispatcher.Infrastructure.Recovery;
 using AgentDispatcher.Infrastructure.Workspaces;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -69,6 +71,7 @@ builder.Services.AddSingleton<IWorkerHealthProbe>(_ =>
         _.GetRequiredService<IWorkerProcessRunner>(),
         workerUser));
 builder.Services.AddSingleton<IDispatchCoordinator, DispatchCoordinator>();
+builder.Services.AddSingleton<IExecutionRecovery, ExecutionRecovery>();
 builder.Services.AddSingleton<IRetentionCleanup>(_ =>
     new RetentionCleanup(
         _.GetRequiredService<IRetentionRepository>(),

@@ -110,3 +110,38 @@ export interface DispatchResult {
   decisions: DispatchDecision[]
   queuedCount: number
 }
+
+
+export interface HealthCheckItem {
+  key: string
+  name: string
+  state: 'Healthy' | 'Warning' | 'Unhealthy'
+  detail: string
+}
+
+export interface HostHealthReport {
+  checkedAt: string
+  checks: HealthCheckItem[]
+  freeDiskBytes?: number
+  available: boolean
+}
+
+export interface ProjectHealthReport {
+  projectId: string
+  projectName: string
+  repository: string
+  checkedAt: string
+  checks: HealthCheckItem[]
+  worktreeCount: number
+  available: boolean
+}
+
+export interface CleanupRun {
+  id: number
+  startedAt: string
+  finishedAt: string
+  worktreesRemoved: number
+  executionsDeleted: number
+  errorCount: number
+  errors: string[]
+}
