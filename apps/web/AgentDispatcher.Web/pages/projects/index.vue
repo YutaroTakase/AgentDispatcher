@@ -20,6 +20,8 @@ const form = reactive<ProjectRequest>({
   issueSortField: 'updated',
   issueSortOrder: 'asc',
   maxCandidatesPerScan: 20,
+  gitHubProjectOwner: '',
+  gitHubProjectNumber: undefined,
   defaultModelIdentifier: '',
   defaultReasoningEffort: 'medium',
 })
@@ -96,9 +98,18 @@ onMounted(() => {
           <label>1回の最大候補数</label>
           <input v-model.number="form.maxCandidatesPerScan" type="number" min="1" max="100">
         </div>
+        <div class="field">
+          <label>GitHub Project owner（任意）</label>
+          <input v-model="form.gitHubProjectOwner" placeholder="owner">
+        </div>
+        <div class="field">
+          <label>GitHub Project number（任意）</label>
+          <input v-model.number="form.gitHubProjectNumber" type="number" min="1" placeholder="1">
+        </div>
         <div class="field full">
-          <label>Issue検索条件</label>
-          <input v-model="form.issueQueryFragment" placeholder="label:agent -label:blocked">
+          <label>候補検索条件</label>
+          <input v-model="form.issueQueryFragment" placeholder="status:Ready label:codex is:issue is:open">
+          <small class="muted">GitHub Project を指定した場合は Projects filter syntax、それ以外は Issue search syntax として使用します。</small>
         </div>
         <div class="field">
           <label>並び替え</label>
