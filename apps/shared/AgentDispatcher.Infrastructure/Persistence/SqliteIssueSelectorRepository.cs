@@ -19,7 +19,9 @@ public sealed class SqliteIssueSelectorRepository(SqliteDatabase database) : IIs
                 query_fragment,
                 sort_field,
                 sort_order,
-                max_candidates_per_scan
+                max_candidates_per_scan,
+                github_project_owner,
+                github_project_number
             FROM project_issue_selectors
             WHERE project_id = $projectId;
             """;
@@ -36,7 +38,9 @@ public sealed class SqliteIssueSelectorRepository(SqliteDatabase database) : IIs
             reader.GetString(0),
             reader.GetString(1),
             reader.GetString(2),
-            reader.GetInt32(3));
+            reader.GetInt32(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetInt32(5));
     }
 
     public async Task UpsertAsync(
@@ -56,24 +60,36 @@ public sealed class SqliteIssueSelectorRepository(SqliteDatabase database) : IIs
                 query_fragment,
                 sort_field,
                 sort_order,
-                max_candidates_per_scan)
+                max_candidates_per_scan,
+                github_project_owner,
+                github_project_number)
             VALUES (
                 $projectId,
                 $queryFragment,
                 $sortField,
                 $sortOrder,
-                $maxCandidatesPerScan)
+                $maxCandidatesPerScan,
+                $gitHubProjectOwner,
+                $gitHubProjectNumber)
             ON CONFLICT(project_id) DO UPDATE SET
                 query_fragment = excluded.query_fragment,
                 sort_field = excluded.sort_field,
                 sort_order = excluded.sort_order,
-                max_candidates_per_scan = excluded.max_candidates_per_scan;
+                max_candidates_per_scan = excluded.max_candidates_per_scan,
+                github_project_owner = excluded.github_project_owner,
+                github_project_number = excluded.github_project_number;
             """;
         command.Parameters.AddWithValue("$projectId", settings.ProjectId.ToString());
         command.Parameters.AddWithValue("$queryFragment", settings.QueryFragment);
         command.Parameters.AddWithValue("$sortField", settings.SortField);
         command.Parameters.AddWithValue("$sortOrder", settings.SortOrder);
         command.Parameters.AddWithValue("$maxCandidatesPerScan", settings.MaxCandidatesPerScan);
+        command.Parameters.AddWithValue(
+            "$gitHubProjectOwner",
+            (object?)settings.GitHubProjectOwner ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$gitHubProjectNumber",
+            settings.GitHubProjectNumber is { } number ? number : DBNull.Value);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
