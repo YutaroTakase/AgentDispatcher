@@ -9,6 +9,7 @@ public enum DispatchDecisionKind
     HealthUnavailable,
     ConfigurationMissing,
     IssueNotFound,
+    InvalidIssueMetadata,
     DuplicateActiveIssue,
     ConcurrencyLimitReached,
     GitHubUnavailable
