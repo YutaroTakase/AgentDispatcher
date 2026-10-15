@@ -6,7 +6,8 @@ public sealed record IssueCandidate(
     int Number,
     string Title,
     IReadOnlyList<string> Labels,
-    string Url);
+    string Url,
+    string Body);
 
 public sealed record RepositoryCheckResult(
     bool Success,
