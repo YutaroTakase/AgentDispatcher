@@ -32,6 +32,8 @@ const form = reactive<ProjectRequest>({
   issueSortField: 'updated',
   issueSortOrder: 'asc',
   maxCandidatesPerScan: 20,
+  gitHubProjectOwner: '',
+  gitHubProjectNumber: undefined,
   defaultModelIdentifier: '',
   defaultReasoningEffort: 'medium',
 })
@@ -78,6 +80,8 @@ async function load() {
     issueSortField: selector.sortField,
     issueSortOrder: selector.sortOrder,
     maxCandidatesPerScan: selector.maxCandidatesPerScan,
+    gitHubProjectOwner: selector.gitHubProjectOwner ?? '',
+    gitHubProjectNumber: selector.gitHubProjectNumber,
     defaultModelIdentifier: defaultRoute.modelIdentifier,
     defaultReasoningEffort: defaultRoute.reasoningEffort,
   })
@@ -213,7 +217,13 @@ onMounted(() => {
         <div class="field"><label>Issue確認間隔（分）</label><input v-model.number="form.issueScanIntervalMinutes" type="number" min="1"></div>
         <div class="field"><label>最大同時実行数</label><input v-model.number="form.maxConcurrentExecutions" type="number" min="1"></div>
         <div class="field"><label>最大候補数</label><input v-model.number="form.maxCandidatesPerScan" type="number" min="1" max="100"></div>
-        <div class="field full"><label>Issue検索条件</label><input v-model="form.issueQueryFragment"></div>
+        <div class="field"><label>GitHub Project owner（任意）</label><input v-model="form.gitHubProjectOwner" placeholder="owner"></div>
+        <div class="field"><label>GitHub Project number（任意）</label><input v-model.number="form.gitHubProjectNumber" type="number" min="1" placeholder="1"></div>
+        <div class="field full">
+          <label>候補検索条件</label>
+          <input v-model="form.issueQueryFragment" placeholder="status:Ready label:codex is:issue is:open">
+          <small class="muted">GitHub Project を指定した場合は Projects filter syntax、それ以外は Issue search syntax として使用します。</small>
+        </div>
         <div class="field">
           <label>並び替え</label>
           <select v-model="form.issueSortField">
@@ -243,7 +253,7 @@ onMounted(() => {
       <div class="page-header">
         <div>
           <h2>推論モデル選択規則</h2>
-          <p class="muted">上から評価し、最初に一致した規則を使用します。</p>
+          <p class="muted">Issue 本文の Codex Metadata が有効な場合はそれを最優先し、Metadata がない場合に上から評価して最初に一致した規則を使用します。</p>
         </div>
         <button class="button secondary" @click="rules.push(makeRule())">規則を追加</button>
       </div>
