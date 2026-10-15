@@ -7,7 +7,7 @@ public sealed record IssueCandidate(
     string Title,
     IReadOnlyList<string> Labels,
     string Url,
-    string Body);
+    string Body = "");
 
 public sealed record RepositoryCheckResult(
     bool Success,
