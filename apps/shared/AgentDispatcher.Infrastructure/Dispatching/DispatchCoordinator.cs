@@ -64,11 +64,20 @@ public sealed class DispatchCoordinator(
 
         foreach (var issue in search.Issues)
         {
-            var decision = RoutingResolver.Resolve(defaultRoute, rules, issue.Labels);
+            var routeResolution = ResolveRoute(defaultRoute, rules, issue);
+            if (routeResolution.Error is not null)
+            {
+                decisions.Add(new DispatchDecision(
+                    issue.Number,
+                    DispatchDecisionKind.InvalidIssueMetadata,
+                    routeResolution.Error));
+                continue;
+            }
+
             var create = await executions.TryCreateQueuedAsync(
                 project,
                 issue,
-                decision,
+                routeResolution.Decision!,
                 trigger,
                 cancellationToken);
 
@@ -138,11 +147,19 @@ public sealed class DispatchCoordinator(
         }
 
         var rules = await routing.ListRulesAsync(projectId, cancellationToken);
-        var route = RoutingResolver.Resolve(defaultRoute, rules, lookup.Issue.Labels);
+        var routeResolution = ResolveRoute(defaultRoute, rules, lookup.Issue);
+        if (routeResolution.Error is not null)
+        {
+            return new DispatchDecision(
+                issueNumber,
+                DispatchDecisionKind.InvalidIssueMetadata,
+                routeResolution.Error);
+        }
+
         var create = await executions.TryCreateQueuedAsync(
             project,
             lookup.Issue,
-            route,
+            routeResolution.Decision!,
             trigger,
             cancellationToken);
 
@@ -335,6 +352,26 @@ public sealed class DispatchCoordinator(
         return null;
     }
 
+    private static RouteResolution ResolveRoute(
+        ExecutionRoute defaultRoute,
+        IReadOnlyList<RoutingRule> rules,
+        IssueCandidate issue)
+    {
+        var metadata = CodexMetadataParser.Parse(issue.Body);
+        return metadata.State switch
+        {
+            CodexMetadataState.Invalid => new RouteResolution(
+                null,
+                metadata.Error ?? "Codex Metadata が不正です。"),
+            CodexMetadataState.Valid => new RouteResolution(
+                new RoutingDecision(metadata.Route!, null),
+                null),
+            _ => new RouteResolution(
+                RoutingResolver.Resolve(defaultRoute, rules, issue.Labels),
+                null)
+        };
+    }
+
     private static DispatchDecision FromCreateFailure(
         int issueNumber,
         ExecutionCreateFailure failure) =>
@@ -356,4 +393,8 @@ public sealed class DispatchCoordinator(
 
     private static DispatchResult Result(DispatchDecision decision) =>
         new([], [decision]);
+
+    private sealed record RouteResolution(
+        RoutingDecision? Decision,
+        string? Error);
 }
