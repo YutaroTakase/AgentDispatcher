@@ -93,4 +93,28 @@ public sealed class RoutingTests
 
         Assert.Equal(defaultRoute, decision.Route);
     }
+
+    [Fact]
+    public void IssueOverrideTakesPriorityOverMatchingRuleAndDefault()
+    {
+        var projectId = Guid.NewGuid();
+        var defaultRoute = ExecutionRoute.Create("default-model", "medium");
+        var rule = RoutingRule.Create(
+            projectId,
+            0,
+            true,
+            ["codex"],
+            [],
+            ExecutionRoute.Create("rule-model", "high"));
+        var issueOverride = ExecutionRoute.Create("issue-model", "low");
+
+        var decision = RoutingResolver.Resolve(
+            defaultRoute,
+            [rule],
+            ["codex"],
+            issueOverride);
+
+        Assert.Equal(issueOverride, decision.Route);
+        Assert.Null(decision.MatchedRuleId);
+    }
 }
