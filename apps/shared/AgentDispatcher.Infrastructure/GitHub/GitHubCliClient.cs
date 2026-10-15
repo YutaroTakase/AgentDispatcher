@@ -96,7 +96,7 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
         return new RepositoryCheckResult(true, branchName, null);
     }
 
-    public async Task<IssueSearchResult> SearchIssuesAsync(
+    public Task<IssueSearchResult> SearchIssuesAsync(
         Project project,
         IssueSelectorSettings selector,
         CancellationToken cancellationToken = default)
@@ -109,6 +109,66 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
             throw new ArgumentException("Issue取得設定のプロジェクトが一致しません。", nameof(selector));
         }
 
+        return selector.UsesGitHubProject
+            ? SearchProjectIssuesAsync(project, selector, cancellationToken)
+            : SearchRepositoryIssuesAsync(project, selector, cancellationToken);
+    }
+
+    public async Task<IssueLookupResult> GetIssueAsync(
+        Project project,
+        int issueNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (issueNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(issueNumber));
+        }
+
+        var result = await processRunner.RunAsync(
+            "gh",
+            [
+                "issue",
+                "view",
+                issueNumber.ToString(),
+                "--repo",
+                project.Repository,
+                "--json",
+                "number,title,body,labels,url,state"
+            ],
+            cancellationToken: cancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            return IssueLookupResult.Failed(NormalizeError(result.StandardError));
+        }
+
+        try
+        {
+            var issue = JsonSerializer.Deserialize<IssueViewResponse>(
+                result.StandardOutput,
+                JsonOptions);
+
+            if (issue is null ||
+                !string.Equals(issue.State, "open", StringComparison.OrdinalIgnoreCase))
+            {
+                return IssueLookupResult.Failed("対象Issueが存在しないか、未完了ではありません。");
+            }
+
+            return IssueLookupResult.Succeeded(ToCandidate(issue));
+        }
+        catch (JsonException)
+        {
+            return IssueLookupResult.Failed(
+                "GitHub CLIのIssue取得結果を解析できませんでした。");
+        }
+    }
+
+    private async Task<IssueSearchResult> SearchRepositoryIssuesAsync(
+        Project project,
+        IssueSelectorSettings selector,
+        CancellationToken cancellationToken)
+    {
         var arguments = new List<string>
         {
             "search",
@@ -124,7 +184,7 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
             "--limit",
             selector.MaxCandidatesPerScan.ToString(),
             "--json",
-            "number,title,labels,url,isPullRequest,state"
+            "number,title,body,labels,url,isPullRequest,state"
         };
 
         if (!string.IsNullOrWhiteSpace(selector.QueryFragment))
@@ -165,61 +225,99 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
         }
     }
 
-    public async Task<IssueLookupResult> GetIssueAsync(
+    private async Task<IssueSearchResult> SearchProjectIssuesAsync(
         Project project,
-        int issueNumber,
-        CancellationToken cancellationToken = default)
+        IssueSelectorSettings selector,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(project);
-        if (issueNumber <= 0)
+        var arguments = new List<string>
         {
-            throw new ArgumentOutOfRangeException(nameof(issueNumber));
+            "project",
+            "item-list",
+            selector.GitHubProjectNumber!.Value.ToString(),
+            "--owner",
+            selector.GitHubProjectOwner!,
+            "--limit",
+            selector.MaxCandidatesPerScan.ToString(),
+            "--format",
+            "json"
+        };
+
+        if (!string.IsNullOrWhiteSpace(selector.QueryFragment))
+        {
+            arguments.Add("--query");
+            arguments.Add(selector.QueryFragment);
         }
 
         var result = await processRunner.RunAsync(
             "gh",
-            [
-                "issue",
-                "view",
-                issueNumber.ToString(),
-                "--repo",
-                project.Repository,
-                "--json",
-                "number,title,labels,url,state"
-            ],
+            arguments,
             cancellationToken: cancellationToken);
 
         if (result.ExitCode != 0)
         {
-            return IssueLookupResult.Failed(NormalizeError(result.StandardError));
+            return IssueSearchResult.Failed(NormalizeError(result.StandardError));
         }
 
+        ProjectItemsResponse? response;
         try
         {
-            var issue = JsonSerializer.Deserialize<IssueViewResponse>(
+            response = JsonSerializer.Deserialize<ProjectItemsResponse>(
                 result.StandardOutput,
                 JsonOptions);
-
-            if (issue is null ||
-                !string.Equals(issue.State, "open", StringComparison.OrdinalIgnoreCase))
-            {
-                return IssueLookupResult.Failed("対象Issueが存在しないか、未完了ではありません。");
-            }
-
-            return IssueLookupResult.Succeeded(new IssueCandidate(
-                issue.Number,
-                issue.Title ?? string.Empty,
-                issue.Labels?
-                    .Where(label => !string.IsNullOrWhiteSpace(label.Name))
-                    .Select(label => label.Name!)
-                    .ToArray() ?? [],
-                issue.Url ?? string.Empty));
         }
         catch (JsonException)
         {
-            return IssueLookupResult.Failed(
-                "GitHub CLIのIssue取得結果を解析できませんでした。");
+            return IssueSearchResult.Failed(
+                "GitHub CLIのProject Item取得結果を解析できませんでした。");
         }
+
+        var itemNumbers = (response?.Items ?? [])
+            .Where(item => IsRepositoryIssue(item, project.Repository))
+            .Select(item => item.Content!.Number)
+            .Where(number => number > 0)
+            .Distinct()
+            .Take(selector.MaxCandidatesPerScan)
+            .ToArray();
+
+        var issues = new List<IssueCandidate>(itemNumbers.Length);
+        foreach (var issueNumber in itemNumbers)
+        {
+            var lookup = await GetIssueAsync(project, issueNumber, cancellationToken);
+            if (!lookup.Success || lookup.Issue is null)
+            {
+                return IssueSearchResult.Failed(
+                    lookup.Error ?? $"Project Item の Issue #{issueNumber} を取得できませんでした。");
+            }
+
+            issues.Add(lookup.Issue);
+        }
+
+        return IssueSearchResult.Succeeded(issues);
+    }
+
+    private static bool IsRepositoryIssue(ProjectItemResponse item, string repository)
+    {
+        if (item.Content is null || item.Content.Number <= 0)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Content.Type) &&
+            !string.Equals(item.Content.Type, "Issue", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Repository))
+        {
+            return string.Equals(item.Repository, repository, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return !string.IsNullOrWhiteSpace(item.Content.Url) &&
+            item.Content.Url.StartsWith(
+                $"https://github.com/{repository}/issues/",
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static IssueCandidate ToCandidate(IssueResponse issue) =>
@@ -230,7 +328,19 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
                 .Where(label => !string.IsNullOrWhiteSpace(label.Name))
                 .Select(label => label.Name!)
                 .ToArray() ?? [],
-            issue.Url ?? string.Empty);
+            issue.Url ?? string.Empty,
+            issue.Body ?? string.Empty);
+
+    private static IssueCandidate ToCandidate(IssueViewResponse issue) =>
+        new(
+            issue.Number,
+            issue.Title ?? string.Empty,
+            issue.Labels?
+                .Where(label => !string.IsNullOrWhiteSpace(label.Name))
+                .Select(label => label.Name!)
+                .ToArray() ?? [],
+            issue.Url ?? string.Empty,
+            issue.Body ?? string.Empty);
 
     private static string NormalizeError(string error)
     {
@@ -244,6 +354,7 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
     private sealed record IssueResponse(
         int Number,
         string? Title,
+        string? Body,
         LabelResponse[]? Labels,
         string? Url,
         bool IsPullRequest,
@@ -252,9 +363,21 @@ public sealed class GitHubCliClient(IWorkerProcessRunner processRunner) : IGitHu
     private sealed record IssueViewResponse(
         int Number,
         string? Title,
+        string? Body,
         LabelResponse[]? Labels,
         string? Url,
         string? State);
+
+    private sealed record ProjectItemsResponse(ProjectItemResponse[]? Items);
+
+    private sealed record ProjectItemResponse(
+        string? Repository,
+        ProjectItemContentResponse? Content);
+
+    private sealed record ProjectItemContentResponse(
+        int Number,
+        string? Type,
+        string? Url);
 
     private sealed record LabelResponse(string? Name);
 }
