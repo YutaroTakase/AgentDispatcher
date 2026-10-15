@@ -103,7 +103,9 @@ public static class ProjectAutomationEndpoints
                 request.QueryFragment,
                 request.SortField,
                 request.SortOrder,
-                request.MaxCandidatesPerScan);
+                request.MaxCandidatesPerScan,
+                request.GitHubProjectOwner,
+                request.GitHubProjectNumber);
 
             await selectors.UpsertAsync(selector, cancellationToken);
             return Results.Ok(selector);
@@ -251,7 +253,9 @@ public sealed record IssueSelectorRequest(
     string? QueryFragment,
     string SortField,
     string SortOrder,
-    int MaxCandidatesPerScan);
+    int MaxCandidatesPerScan,
+    string? GitHubProjectOwner,
+    int? GitHubProjectNumber);
 
 public sealed record RouteRequest(
     string ModelIdentifier,
