@@ -3,7 +3,9 @@
 このディレクトリはAgentDispatcherの実装・検証ルールを扱う。
 
 - プロダクト要件: [docs/product/product-requirements.md](../product/product-requirements.md)
+- Codex Handoff: [docs/product/codex-handoff.md](../product/codex-handoff.md)
 - アーキテクチャ: [docs/architecture/README.md](../architecture/README.md)
+- Codex Handoff Architecture: [docs/architecture/codex-handoff.md](../architecture/codex-handoff.md)
 - 実行の流れ: [docs/architecture/system-overview.md](../architecture/system-overview.md)
 
 リポジトリ配置や採用技術はここへ重複記載しない。
@@ -33,6 +35,9 @@
 - 標準出力と標準エラー出力を障害調査可能な形で保持する。
 - データベース構造の変更は移行可能にする。
 - Web画面から任意のシェルコマンドを実行する機能を追加しない。
+- GitHub Projects の Field 値を AgentDispatcher の Domain へハードコードせず、Projects filter query を GitHub 側の検索契約として扱う。
+- Issue に明示された Codex Metadata は Project routing より優先し、不正な Metadata を fallback で隠さない。
+- Dispatcher 自身は対象 Repository の Workflow 状態や成果判定を変更しない。
 
 ## 検証方針
 
@@ -42,6 +47,8 @@ MVPでは少なくとも次を自動検証対象とする。
 - Nuxtの型検査、静的解析、ビルド
 - データベース移行テスト
 - 推論モデル選択規則の決定性テスト
+- Issue Codex Metadata の解析・validation・routing override テスト
+- GitHub Project selector の query 組み立てと Issue 解決テスト
 - 二重実行防止の同時実行テスト
 - 実行状態遷移テスト
 - 作業ツリーの作成・削除を含む結合テスト

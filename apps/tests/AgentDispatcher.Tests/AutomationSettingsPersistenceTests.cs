@@ -52,10 +52,12 @@ public sealed class AutomationSettingsPersistenceTests : IAsyncLifetime
 
         var selector = IssueSelectorSettings.Create(
             project.Id,
-            "label:agent -label:blocked",
+            "status:Ready label:codex is:issue is:open",
             "updated",
             "desc",
-            20);
+            20,
+            "owner",
+            7);
         await selectors.UpsertAsync(selector, cancellationToken);
 
         var defaultRoute = ExecutionRoute.Create("default-model", "medium");
@@ -88,6 +90,9 @@ public sealed class AutomationSettingsPersistenceTests : IAsyncLifetime
 
         Assert.NotNull(restoredSelector);
         Assert.Equal(selector.QueryFragment, restoredSelector.QueryFragment);
+        Assert.Equal("owner", restoredSelector.GitHubProjectOwner);
+        Assert.Equal(7, restoredSelector.GitHubProjectNumber);
+        Assert.True(restoredSelector.UsesGitHubProject);
         Assert.Equal(defaultRoute, restoredDefault);
 
         var restoredRule = Assert.Single(restoredRules);

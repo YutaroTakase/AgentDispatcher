@@ -23,6 +23,8 @@ export interface ProjectRequest {
   issueSortField: string
   issueSortOrder: string
   maxCandidatesPerScan: number
+  gitHubProjectOwner?: string
+  gitHubProjectNumber?: number
   defaultModelIdentifier: string
   defaultReasoningEffort: string
 }
@@ -33,6 +35,9 @@ export interface IssueSelector {
   sortField: string
   sortOrder: string
   maxCandidatesPerScan: number
+  gitHubProjectOwner?: string
+  gitHubProjectNumber?: number
+  usesGitHubProject: boolean
 }
 
 export interface ExecutionRoute {
@@ -110,7 +115,6 @@ export interface DispatchResult {
   decisions: DispatchDecision[]
   queuedCount: number
 }
-
 
 export interface HealthCheckItem {
   key: string

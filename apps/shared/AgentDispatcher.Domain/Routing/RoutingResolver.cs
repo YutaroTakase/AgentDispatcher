@@ -5,11 +5,17 @@ public static class RoutingResolver
     public static RoutingDecision Resolve(
         ExecutionRoute defaultRoute,
         IEnumerable<RoutingRule> rules,
-        IEnumerable<string> issueLabels)
+        IEnumerable<string> issueLabels,
+        ExecutionRoute? issueOverride = null)
     {
         ArgumentNullException.ThrowIfNull(defaultRoute);
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(issueLabels);
+
+        if (issueOverride is not null)
+        {
+            return new RoutingDecision(issueOverride, null);
+        }
 
         var labels = new HashSet<string>(
             issueLabels.Where(label => !string.IsNullOrWhiteSpace(label)),

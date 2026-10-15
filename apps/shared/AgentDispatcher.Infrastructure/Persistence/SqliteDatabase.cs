@@ -130,6 +130,15 @@ public sealed class SqliteDatabase
 
             CREATE INDEX ix_cleanup_runs_finished_at
                 ON cleanup_runs(finished_at_utc DESC);
+            """),
+        new(
+            6,
+            """
+            ALTER TABLE project_issue_selectors
+                ADD COLUMN github_project_owner TEXT NULL;
+
+            ALTER TABLE project_issue_selectors
+                ADD COLUMN github_project_number INTEGER NULL;
             """)
     ];
 

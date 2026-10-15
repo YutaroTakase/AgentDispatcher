@@ -170,7 +170,9 @@ public static class ProjectEndpoints
                 request.IssueQueryFragment,
                 request.IssueSortField,
                 request.IssueSortOrder,
-                request.MaxCandidatesPerScan);
+                request.MaxCandidatesPerScan,
+                request.GitHubProjectOwner,
+                request.GitHubProjectNumber);
 
             defaultRoute = ExecutionRoute.Create(
                 request.DefaultModelIdentifier,
@@ -227,6 +229,8 @@ public sealed record ProjectRequest(
     string IssueSortField,
     string IssueSortOrder,
     int MaxCandidatesPerScan,
+    string? GitHubProjectOwner,
+    int? GitHubProjectNumber,
     string DefaultModelIdentifier,
     string DefaultReasoningEffort);
 
